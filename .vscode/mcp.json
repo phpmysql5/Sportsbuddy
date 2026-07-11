@@ -1,0 +1,40 @@
+{
+  "servers": {
+    "postgres": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://sportsbuddy:sportsbuddy@localhost:5432/sportsbuddy"
+      ]
+    },
+    "filesystem": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "${workspaceFolder}"
+      ]
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp"
+    },
+    "docker": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@tmhs/docker-mcp"
+      ],
+      "env": {
+        "PATH": "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env:PATH}"
+      }
+    }
+  }
+}
