@@ -7,7 +7,7 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
-import type { SkillLevel } from '../../core/domain.types';
+import { SkillLevel } from '@prisma/client';
 
 const SKILL_LEVELS: SkillLevel[] = ['beginner', 'intermediate', 'advanced'];
 

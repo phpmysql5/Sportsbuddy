@@ -6,15 +6,15 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
-import { User } from '../core/domain.types';
+import type { AuthenticatedUser } from './auth.types';
 
-type AuthenticatedRequest = Request & { user?: User };
+type AuthenticatedRequest = Request & { user?: AuthenticatedUser };
 
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(private readonly authService: AuthService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const header = request.headers.authorization;
 
@@ -23,7 +23,7 @@ export class AuthGuard implements CanActivate {
     }
 
     const token = header.slice('Bearer '.length).trim();
-    request.user = this.authService.resolveToken(token);
+    request.user = await this.authService.resolveAccessToken(token);
     return true;
   }
 }

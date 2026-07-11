@@ -1,7 +1,7 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AuthGuard } from '../auth/auth.guard';
-import type { User } from '../core/domain.types';
+import type { AuthenticatedUser } from '../auth/auth.types';
 import { MatchingService } from './matching.service';
 
 @Controller('matching')
@@ -10,7 +10,7 @@ export class MatchingController {
   constructor(private readonly matchingService: MatchingService) {}
 
   @Get('suggestions')
-  getSuggestions(@CurrentUser() user: User) {
+  async getSuggestions(@CurrentUser() user: AuthenticatedUser) {
     return this.matchingService.getSuggestions(user);
   }
 }

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { MatchSuggestion, SkillLevel, User } from '../core/domain.types';
-import { MemoryStoreService } from '../core/memory-store.service';
+import { SkillLevel, User } from '@prisma/client';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { MatchSuggestion, toPublicUser } from '../common/user.mapper';
+import { PrismaService } from '../database/prisma.service';
 
 const skillScore: Record<SkillLevel, number> = {
   beginner: 1,
@@ -10,11 +12,17 @@ const skillScore: Record<SkillLevel, number> = {
 
 @Injectable()
 export class MatchingService {
-  constructor(private readonly store: MemoryStoreService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  getSuggestions(user: User): MatchSuggestion[] {
-    const candidates = this.store
-      .listUsers()
+  async getSuggestions(user: AuthenticatedUser): Promise<MatchSuggestion[]> {
+    const users = await this.prisma.user.findMany();
+
+    const current = users.find((candidate) => candidate.id === user.id);
+    if (!current) {
+      return [];
+    }
+
+    const candidates = users
       .filter((candidate) => candidate.id !== user.id)
       .filter((candidate) => this.isCompatible(user, candidate))
       .map((candidate) => this.toSuggestion(user, candidate))
@@ -23,7 +31,7 @@ export class MatchingService {
     return candidates;
   }
 
-  private isCompatible(current: User, candidate: User): boolean {
+  private isCompatible(current: AuthenticatedUser, candidate: User): boolean {
     return (
       !!current.city &&
       !!current.sport &&
@@ -37,7 +45,10 @@ export class MatchingService {
     );
   }
 
-  private toSuggestion(current: User, candidate: User): MatchSuggestion {
+  private toSuggestion(
+    current: AuthenticatedUser,
+    candidate: User,
+  ): MatchSuggestion {
     const reasons = ['Same city', 'Same sport'];
 
     if (current.skillLevel === candidate.skillLevel) {
@@ -55,7 +66,7 @@ export class MatchingService {
 
     const score = reasons.length;
     return {
-      user: this.store.toPublicUser(candidate),
+      user: toPublicUser(candidate),
       score,
       reasons,
     };
