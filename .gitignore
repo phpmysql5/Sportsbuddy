@@ -22,3 +22,4 @@ mobile/sports_buddy_app/build/
 
 # Local tooling state
 .vscode/.ropeproject/
+.vscode/tasks.json
