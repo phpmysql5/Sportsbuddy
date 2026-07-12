@@ -26,14 +26,19 @@ class _HomeScreenState extends State<HomeScreen> {
   String _skill = 'beginner';
   bool _profileLoading = false;
   bool _suggestionsLoading = false;
+  bool _connectionsLoading = false;
   String? _status;
   List<Map<String, dynamic>> _suggestions = [];
+  List<Map<String, dynamic>> _incomingRequests = [];
+  List<Map<String, dynamic>> _outgoingRequests = [];
+  List<Map<String, dynamic>> _buddies = [];
 
   @override
   void initState() {
     super.initState();
     _hydrateProfile();
     _loadSuggestions();
+    _loadConnections();
   }
 
   void _hydrateProfile() {
@@ -107,6 +112,76 @@ class _HomeScreenState extends State<HomeScreen> {
     } finally {
       setState(() {
         _suggestionsLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadConnections() async {
+    setState(() {
+      _connectionsLoading = true;
+    });
+
+    try {
+      final incoming = await widget.api.incomingRequests();
+      final outgoing = await widget.api.outgoingRequests();
+      final buddies = await widget.api.buddies();
+
+      setState(() {
+        _incomingRequests = incoming;
+        _outgoingRequests = outgoing;
+        _buddies = buddies;
+      });
+    } catch (_) {
+      setState(() {
+        _incomingRequests = [];
+        _outgoingRequests = [];
+        _buddies = [];
+      });
+    } finally {
+      setState(() {
+        _connectionsLoading = false;
+      });
+    }
+  }
+
+  Future<void> _sendRequest(String receiverId) async {
+    try {
+      await widget.api.sendConnectionRequest(receiverId: receiverId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = 'Connection request sent';
+      });
+      await _loadConnections();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _respondRequest(String requestId, String action) async {
+    try {
+      await widget.api.respondToRequest(requestId: requestId, action: action);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = action == 'accept'
+            ? 'Request accepted'
+            : 'Request rejected';
+      });
+      await _loadConnections();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = e.toString().replaceFirst('Exception: ', '');
       });
     }
   }
@@ -249,6 +324,108 @@ class _HomeScreenState extends State<HomeScreen> {
                     trailing: CircleAvatar(
                       child: Text('${s['score']}'),
                     ),
+                    onTap: () {
+                      final userId = s['user']?['id']?.toString();
+                      if (userId != null && userId.isNotEmpty) {
+                        _sendRequest(userId);
+                      }
+                    },
+                  ),
+                ),
+              ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Connection Requests',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                TextButton(
+                  onPressed: _connectionsLoading ? null : _loadConnections,
+                  child: const Text('Refresh'),
+                ),
+              ],
+            ),
+            if (_connectionsLoading)
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else ...[
+              if (_incomingRequests.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('No incoming requests'),
+                  ),
+                )
+              else
+                ..._incomingRequests.map(
+                  (request) => Card(
+                    child: ListTile(
+                      title: Text(
+                        (request['sender']?['name'] ?? 'Unknown').toString(),
+                      ),
+                      subtitle: const Text('Incoming request'),
+                      trailing: Wrap(
+                        spacing: 8,
+                        children: [
+                          IconButton(
+                            tooltip: 'Reject',
+                            onPressed: () => _respondRequest(
+                              request['id'].toString(),
+                              'reject',
+                            ),
+                            icon: const Icon(Icons.close),
+                          ),
+                          IconButton(
+                            tooltip: 'Accept',
+                            onPressed: () => _respondRequest(
+                              request['id'].toString(),
+                              'accept',
+                            ),
+                            icon: const Icon(Icons.check),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              if (_outgoingRequests.isNotEmpty)
+                ..._outgoingRequests.map(
+                  (request) => Card(
+                    child: ListTile(
+                      title: Text(
+                        (request['receiver']?['name'] ?? 'Unknown').toString(),
+                      ),
+                      subtitle: const Text('Outgoing request (pending)'),
+                    ),
+                  ),
+                ),
+            ],
+            const SizedBox(height: 14),
+            Text(
+              'Connected Buddies',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            if (_buddies.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No connected buddies yet.'),
+                ),
+              )
+            else
+              ..._buddies.map(
+                (buddy) => Card(
+                  child: ListTile(
+                    title: Text((buddy['name'] ?? 'Unknown').toString()),
+                    subtitle: Text(
+                      '${buddy['sport'] ?? '-'} in ${buddy['city'] ?? '-'}',
+                    ),
+                    leading: const Icon(Icons.people),
                   ),
                 ),
               ),

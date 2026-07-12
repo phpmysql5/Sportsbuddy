@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
+import { ConnectionsModule } from './connections/connections.module';
 import { PrismaModule } from './database/prisma.module';
 import { MatchingModule } from './matching/matching.module';
 import { ProfileModule } from './profile/profile.module';
@@ -63,6 +64,7 @@ function readNodeEnv(): string {
     ]),
     PrismaModule,
     AuthModule,
+    ConnectionsModule,
     ProfileModule,
     MatchingModule,
   ],

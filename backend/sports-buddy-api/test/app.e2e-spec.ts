@@ -24,6 +24,11 @@ type SuggestionBody = {
   score: number;
 };
 
+type ConnectionRequestBody = {
+  id: string;
+  status: string;
+};
+
 function asRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null) {
     throw new Error('Expected object response body');
@@ -89,6 +94,22 @@ function toSuggestionsBody(body: unknown): SuggestionBody[] {
       score,
     };
   });
+}
+
+function toConnectionRequestBody(body: unknown): ConnectionRequestBody {
+  const record = asRecord(body);
+  return {
+    id: readString(record, 'id'),
+    status: readString(record, 'status'),
+  };
+}
+
+function toRecordArray(body: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(body)) {
+    throw new Error('Expected array response body');
+  }
+
+  return body.map((entry) => asRecord(entry));
 }
 
 async function registerUser(
@@ -458,6 +479,74 @@ describe('Sports Buddy API (e2e)', () => {
     );
 
     expect(buddy).toBeDefined();
+  });
+
+  it('sends, accepts, and lists connected buddies', async () => {
+    const unique = Date.now().toString();
+    const password = 'Password123!';
+
+    const userA = await registerUser(app, {
+      name: 'Request Sender',
+      email: `request-a-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+    const userB = await registerUser(app, {
+      name: 'Request Receiver',
+      email: `request-b-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+
+    const senderMe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+    const sender = toPublicUserBody(senderMe.body);
+
+    const receiverMe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .expect(200);
+    const receiverRecord = asRecord(receiverMe.body);
+    const receiverId = readString(receiverRecord, 'id');
+
+    const sendResponse = await request(app.getHttpServer())
+      .post('/connections/requests')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .send({ receiverId })
+      .expect(201);
+
+    const sentRequest = toConnectionRequestBody(sendResponse.body);
+    expect(sentRequest.status).toBe('pending');
+
+    const incoming = await request(app.getHttpServer())
+      .get('/connections/requests/incoming')
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .expect(200);
+
+    const incomingList = toRecordArray(incoming.body);
+    expect(incomingList.length).toBe(1);
+
+    const respondResponse = await request(app.getHttpServer())
+      .post(`/connections/requests/${sentRequest.id}/respond`)
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .send({ action: 'accept' })
+      .expect(201);
+
+    const responded = toConnectionRequestBody(respondResponse.body);
+    expect(responded.status).toBe('accepted');
+
+    const senderBuddies = await request(app.getHttpServer())
+      .get('/connections/buddies')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+
+    const senderBuddiesList = toRecordArray(senderBuddies.body);
+    expect(senderBuddiesList.length).toBe(1);
+    expect(readString(senderBuddiesList[0], 'email')).toBe(
+      `request-b-${unique}@e2e.sportsbuddy.dev`,
+    );
+
+    expect(sender.email).toBe(`request-a-${unique}@e2e.sportsbuddy.dev`);
   });
 
   afterAll(async () => {

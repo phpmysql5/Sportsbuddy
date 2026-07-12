@@ -93,6 +93,63 @@ class SportsApi {
     return List<dynamic>.from(raw as List);
   }
 
+  Future<Map<String, dynamic>> sendConnectionRequest({
+    required String receiverId,
+  }) async {
+    final raw = await _authorizedRequest(
+      method: 'POST',
+      path: '/connections/requests',
+      body: {'receiverId': receiverId},
+    );
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> incomingRequests() async {
+    final raw = await _authorizedRequest(
+      method: 'GET',
+      path: '/connections/requests/incoming',
+    );
+
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> outgoingRequests() async {
+    final raw = await _authorizedRequest(
+      method: 'GET',
+      path: '/connections/requests/outgoing',
+    );
+
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> respondToRequest({
+    required String requestId,
+    required String action,
+  }) async {
+    final raw = await _authorizedRequest(
+      method: 'POST',
+      path: '/connections/requests/$requestId/respond',
+      body: {'action': action},
+    );
+
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> buddies() async {
+    final raw = await _authorizedRequest(
+      method: 'GET',
+      path: '/connections/buddies',
+    );
+
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
   Future<dynamic> _authorizedRequest({
     required String method,
     required String path,

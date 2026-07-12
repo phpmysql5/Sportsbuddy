@@ -13,6 +13,12 @@ enum SkillLevel {
   advanced
 }
 
+enum ConnectionRequestStatus {
+  pending
+  accepted
+  rejected
+}
+
 model User {
   id               String      @id @default(uuid())
   email            String      @unique
@@ -23,6 +29,24 @@ model User {
   sport            String?
   skillLevel       SkillLevel?
   availabilityDays String[]
+  sentRequests     ConnectionRequest[] @relation("ConnectionSender")
+  receivedRequests ConnectionRequest[] @relation("ConnectionReceiver")
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
+}
+
+model ConnectionRequest {
+  id         String                  @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     ConnectionRequestStatus @default(pending)
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+
+  sender   User @relation("ConnectionSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ConnectionReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([receiverId, status])
+  @@index([senderId, status])
 }
