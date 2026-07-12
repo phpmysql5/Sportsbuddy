@@ -32,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _incomingRequests = [];
   List<Map<String, dynamic>> _outgoingRequests = [];
   List<Map<String, dynamic>> _buddies = [];
+  final Set<String> _sendingRequestIds = <String>{};
 
   @override
   void initState() {
@@ -145,6 +146,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _sendRequest(String receiverId) async {
+    setState(() {
+      _sendingRequestIds.add(receiverId);
+    });
+
     try {
       await widget.api.sendConnectionRequest(receiverId: receiverId);
       if (!mounted) {
@@ -161,6 +166,12 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _status = e.toString().replaceFirst('Exception: ', '');
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingRequestIds.remove(receiverId);
+        });
+      }
     }
   }
 
@@ -184,6 +195,22 @@ class _HomeScreenState extends State<HomeScreen> {
         _status = e.toString().replaceFirst('Exception: ', '');
       });
     }
+  }
+
+  bool _isConnected(String userId) {
+    return _buddies.any((buddy) => buddy['id']?.toString() == userId);
+  }
+
+  bool _hasOutgoingRequest(String userId) {
+    return _outgoingRequests.any(
+      (request) => request['receiver']?['id']?.toString() == userId,
+    );
+  }
+
+  bool _hasIncomingRequestFrom(String userId) {
+    return _incomingRequests.any(
+      (request) => request['sender']?['id']?.toString() == userId,
+    );
   }
 
   @override
@@ -313,25 +340,67 @@ class _HomeScreenState extends State<HomeScreen> {
               )
             else
               ..._suggestions.map(
-                (s) => Card(
-                  child: ListTile(
-                    title: Text((s['user']?['name'] ?? 'Unknown').toString()),
-                    subtitle: Text(
-                      '${s['user']?['sport'] ?? '-'} in ${s['user']?['city'] ?? '-'}\n'
-                      'Reasons: ${(s['reasons'] as List).join(', ')}',
+                (s) {
+                  final userId = s['user']?['id']?.toString() ?? '';
+                  final isConnected = userId.isNotEmpty && _isConnected(userId);
+                  final hasOutgoing =
+                      userId.isNotEmpty && _hasOutgoingRequest(userId);
+                  final hasIncoming =
+                      userId.isNotEmpty && _hasIncomingRequestFrom(userId);
+                  final isSending =
+                      userId.isNotEmpty && _sendingRequestIds.contains(userId);
+
+                  Widget actionButton;
+                  if (isConnected) {
+                    actionButton = const FilledButton(
+                      onPressed: null,
+                      child: Text('Connected'),
+                    );
+                  } else if (hasOutgoing) {
+                    actionButton = const OutlinedButton(
+                      onPressed: null,
+                      child: Text('Requested'),
+                    );
+                  } else if (hasIncoming) {
+                    actionButton = const OutlinedButton(
+                      onPressed: null,
+                      child: Text('Respond in Requests'),
+                    );
+                  } else {
+                    actionButton = FilledButton(
+                      onPressed: (isSending || userId.isEmpty)
+                          ? null
+                          : () => _sendRequest(userId),
+                      child: Text(isSending ? 'Sending...' : 'Send Request'),
+                    );
+                  }
+
+                  return Card(
+                    child: ListTile(
+                      title: Text((s['user']?['name'] ?? 'Unknown').toString()),
+                      subtitle: Text(
+                        '${s['user']?['sport'] ?? '-'} in ${s['user']?['city'] ?? '-'}\n'
+                        'Reasons: ${(s['reasons'] as List).join(', ')}',
+                      ),
+                      isThreeLine: true,
+                      trailing: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 170),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            CircleAvatar(
+                              radius: 16,
+                              child: Text('${s['score']}'),
+                            ),
+                            const SizedBox(height: 8),
+                            actionButton,
+                          ],
+                        ),
+                      ),
                     ),
-                    isThreeLine: true,
-                    trailing: CircleAvatar(
-                      child: Text('${s['score']}'),
-                    ),
-                    onTap: () {
-                      final userId = s['user']?['id']?.toString();
-                      if (userId != null && userId.isNotEmpty) {
-                        _sendRequest(userId);
-                      }
-                    },
-                  ),
-                ),
+                  );
+                },
               ),
             const SizedBox(height: 14),
             Row(
