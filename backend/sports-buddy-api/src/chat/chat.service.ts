@@ -100,7 +100,9 @@ export class ChatService {
     }
 
     if (!(await this.areConnected(user.id, buddyId))) {
-      throw new BadRequestException('You can only view connected buddy messages');
+      throw new BadRequestException(
+        'You can only view connected buddy messages',
+      );
     }
 
     const messages = await this.prisma.buddyMessage.findMany({

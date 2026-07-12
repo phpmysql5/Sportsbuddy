@@ -703,7 +703,10 @@ describe('Sports Buddy API (e2e)', () => {
       .expect(200);
     const beforeBlockSuggestions = toSuggestionsBody(beforeBlock.body);
     expect(
-      beforeBlockSuggestions.some((candidate) => candidate.user.email === `safety-b-${unique}@e2e.sportsbuddy.dev`),
+      beforeBlockSuggestions.some(
+        (candidate) =>
+          candidate.user.email === `safety-b-${unique}@e2e.sportsbuddy.dev`,
+      ),
     ).toBe(true);
 
     await request(app.getHttpServer())
@@ -746,7 +749,10 @@ describe('Sports Buddy API (e2e)', () => {
 
     const afterUnblockSuggestions = toSuggestionsBody(afterUnblock.body);
     expect(
-      afterUnblockSuggestions.some((candidate) => candidate.user.email === `safety-b-${unique}@e2e.sportsbuddy.dev`),
+      afterUnblockSuggestions.some(
+        (candidate) =>
+          candidate.user.email === `safety-b-${unique}@e2e.sportsbuddy.dev`,
+      ),
     ).toBe(true);
 
     expect(userAId.length).toBeGreaterThan(5);
@@ -856,7 +862,9 @@ describe('Sports Buddy API (e2e)', () => {
       .set('Authorization', `Bearer ${userA.accessToken}`)
       .send({ content: 'Let us play at 7 AM in City Court' })
       .expect(201);
-    expect(readString(asRecord(firstMessage.body), 'content')).toContain('7 AM');
+    expect(readString(asRecord(firstMessage.body), 'content')).toContain(
+      '7 AM',
+    );
 
     await request(app.getHttpServer())
       .post(`/chat/buddies/${userBId}/messages`)

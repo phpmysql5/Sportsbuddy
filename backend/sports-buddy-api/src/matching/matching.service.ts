@@ -80,10 +80,7 @@ export class MatchingService {
     );
   }
 
-  private toSuggestion(
-    current: User,
-    candidate: User,
-  ): MatchSuggestion {
+  private toSuggestion(current: User, candidate: User): MatchSuggestion {
     const reasons = ['Same city', 'Same sport'];
 
     if (current.skillLevel === candidate.skillLevel) {
