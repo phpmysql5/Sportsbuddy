@@ -7,7 +7,7 @@ type DemoUserSeed = {
   email: string;
   name: string;
   city: string;
-  sport: string;
+  sports: string[];
   skillLevel: 'beginner' | 'intermediate' | 'advanced';
   availabilityDays: string[];
 };
@@ -19,7 +19,7 @@ const DEMO_USERS: DemoUserSeed[] = [
     email: 'ava.tennis@sportsbuddy.dev',
     name: 'Ava Patel',
     city: 'Bengaluru',
-    sport: 'Tennis',
+    sports: ['Tennis', 'Pickleball'],
     skillLevel: 'intermediate',
     availabilityDays: ['Mon', 'Wed', 'Sat'],
   },
@@ -27,7 +27,7 @@ const DEMO_USERS: DemoUserSeed[] = [
     email: 'ryan.tennis@sportsbuddy.dev',
     name: 'Ryan Mehta',
     city: 'Bengaluru',
-    sport: 'Tennis',
+    sports: ['Tennis'],
     skillLevel: 'intermediate',
     availabilityDays: ['Wed', 'Fri', 'Sat'],
   },
@@ -35,7 +35,7 @@ const DEMO_USERS: DemoUserSeed[] = [
     email: 'maya.badminton@sportsbuddy.dev',
     name: 'Maya Reddy',
     city: 'Bengaluru',
-    sport: 'Badminton',
+    sports: ['Badminton', 'Tennis'],
     skillLevel: 'advanced',
     availabilityDays: ['Tue', 'Thu', 'Sun'],
   },
@@ -43,7 +43,7 @@ const DEMO_USERS: DemoUserSeed[] = [
     email: 'noah.cricket@sportsbuddy.dev',
     name: 'Noah Sharma',
     city: 'Hyderabad',
-    sport: 'Cricket',
+    sports: ['Cricket'],
     skillLevel: 'beginner',
     availabilityDays: ['Sat', 'Sun'],
   },
@@ -51,7 +51,7 @@ const DEMO_USERS: DemoUserSeed[] = [
     email: 'sara.tennis@sportsbuddy.dev',
     name: 'Sara Iyer',
     city: 'Bengaluru',
-    sport: 'Tennis',
+    sports: ['Tennis', 'Badminton'],
     skillLevel: 'advanced',
     availabilityDays: ['Mon', 'Thu', 'Sat'],
   },
@@ -59,7 +59,7 @@ const DEMO_USERS: DemoUserSeed[] = [
     email: 'arjun.mangalore@sportsbuddy.dev',
     name: 'Arjun Dsouza',
     city: 'Mangalore',
-    sport: 'Tennis',
+    sports: ['Tennis', 'Football'],
     skillLevel: 'beginner',
     availabilityDays: ['Sat', 'Sun'],
   },
@@ -67,7 +67,7 @@ const DEMO_USERS: DemoUserSeed[] = [
     email: 'neha.mangalore@sportsbuddy.dev',
     name: 'Neha Shetty',
     city: 'Mangalore',
-    sport: 'Tennis',
+    sports: ['Tennis'],
     skillLevel: 'intermediate',
     availabilityDays: ['Fri', 'Sat'],
   },
@@ -75,7 +75,7 @@ const DEMO_USERS: DemoUserSeed[] = [
     email: 'rohan.mangalore@sportsbuddy.dev',
     name: 'Rohan Pinto',
     city: 'Mangalore',
-    sport: 'Tennis',
+    sports: ['Tennis', 'Cricket'],
     skillLevel: 'beginner',
     availabilityDays: ['Thu', 'Sat'],
   },
@@ -139,7 +139,8 @@ async function main() {
         update: {
           name: user.name,
           city: user.city,
-          sport: user.sport,
+          sport: user.sports[0],
+          sports: user.sports,
           skillLevel: user.skillLevel,
           availabilityDays: user.availabilityDays,
           passwordHash,
@@ -149,7 +150,8 @@ async function main() {
           email: user.email,
           name: user.name,
           city: user.city,
-          sport: user.sport,
+          sport: user.sports[0],
+          sports: user.sports,
           skillLevel: user.skillLevel,
           availabilityDays: user.availabilityDays,
           passwordHash,

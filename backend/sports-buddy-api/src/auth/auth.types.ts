@@ -6,6 +6,7 @@ export interface AuthenticatedUser {
   name: string;
   city: string | null;
   sport: string | null;
+  sports: string[];
   skillLevel: SkillLevel | null;
   availabilityDays: string[];
 }

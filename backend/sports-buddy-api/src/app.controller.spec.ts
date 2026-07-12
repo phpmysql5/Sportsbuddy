@@ -18,4 +18,32 @@ describe('AppController', () => {
       expect(appController.getHealth()).toEqual({ status: 'ok' });
     });
   });
+
+  describe('meta', () => {
+    it('should return supported cities', () => {
+      expect(appController.getSupportedCities()).toEqual({
+        cities: [
+          'Mangalore',
+          'Bengaluru',
+          'Mumbai',
+          'Delhi',
+          'Hyderabad',
+          'Chennai',
+        ],
+      });
+    });
+
+    it('should return supported sports', () => {
+      expect(appController.getSupportedSports()).toEqual({
+        sports: [
+          'Tennis',
+          'Badminton',
+          'Cricket',
+          'Football',
+          'Basketball',
+          'Pickleball',
+        ],
+      });
+    });
+  });
 });

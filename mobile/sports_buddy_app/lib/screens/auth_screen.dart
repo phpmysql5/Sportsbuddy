@@ -19,8 +19,13 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
+  static const String _defaultGoogleServerClientId =
+      '1032938899677-kpmci4nbuko9gotfebhj4ddbkm2hgsqr.apps.googleusercontent.com';
   static const String _googleServerClientId =
-      String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID', defaultValue: '');
+      String.fromEnvironment(
+        'GOOGLE_SERVER_CLIENT_ID',
+        defaultValue: _defaultGoogleServerClientId,
+      );
 
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
@@ -88,9 +93,7 @@ class _AuthScreenState extends State<AuthScreen> {
       final auth = await account.authentication;
       final idToken = auth.idToken;
       if (idToken == null || idToken.isEmpty) {
-        throw Exception(
-          'Google did not return ID token. Set GOOGLE_SERVER_CLIENT_ID for app run.',
-        );
+        throw Exception('Google sign-in did not return an ID token.');
       }
 
       final data = await widget.api.googleSignIn(idToken: idToken);
@@ -233,6 +236,18 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     final text = error.toString().replaceFirst('Exception: ', '');
+    final lower = text.toLowerCase();
+    if (lower.contains('connection refused') ||
+      lower.contains('socketexception') ||
+      lower.contains('failed host lookup') ||
+      lower.contains('10.0.2.2:3000') ||
+      (lower.contains('clientexception') &&
+        lower.contains('10.0.2.2') &&
+        (lower.contains('/auth/google') ||
+          lower.contains('/auth/login') ||
+          lower.contains('/auth/register')))) {
+      return 'Backend server is not reachable. Start backend on port 3000 and try again.';
+    }
     if (text.contains('Invalid email or password')) {
       return 'Invalid email or password.';
     }

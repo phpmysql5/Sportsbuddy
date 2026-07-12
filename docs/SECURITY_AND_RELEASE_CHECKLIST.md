@@ -61,3 +61,6 @@ Do not use prisma db push against production databases.
 - Connected buddies can exchange chat messages.
 - Non-buddies are blocked from chat endpoints.
 - Google sign-in end to end works with live client IDs.
+- Session plan create/discover/join/leave/status-update flow works.
+- Non-buddies cannot join session plans.
+- Session status updates are allowed only for the plan creator.

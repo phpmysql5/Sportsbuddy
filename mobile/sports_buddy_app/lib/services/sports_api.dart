@@ -60,6 +60,38 @@ class SportsApi {
     return Map<String, dynamic>.from(raw as Map);
   }
 
+  Future<List<String>> supportedCities() async {
+    final response = await _request(method: 'GET', path: '/meta/supported-cities');
+    final decoded = _decode(response);
+    final cities = (decoded as Map)['cities'];
+    if (cities is! List) {
+      throw Exception('Invalid supported cities response');
+    }
+
+    return cities
+        .map((city) => city.toString().trim())
+        .where((city) => city.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+  }
+
+  Future<List<String>> supportedSports() async {
+    final response = await _request(method: 'GET', path: '/meta/supported-sports');
+    final decoded = _decode(response);
+    final sports = (decoded as Map)['sports'];
+    if (sports is! List) {
+      throw Exception('Invalid supported sports response');
+    }
+
+    return sports
+        .map((sport) => sport.toString().trim())
+        .where((sport) => sport.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+  }
+
   Future<void> logout() async {
     try {
       await _authorizedRequest(method: 'POST', path: '/auth/logout');
@@ -68,16 +100,22 @@ class SportsApi {
 
   Future<Map<String, dynamic>> updateProfile({
     required String city,
-    required String sport,
+    required List<String> sports,
     required String skillLevel,
     required List<String> availabilityDays,
   }) async {
+    final normalizedSports = sports
+        .map((sport) => sport.trim())
+        .where((sport) => sport.isNotEmpty)
+        .toList();
+
     final raw = await _authorizedRequest(
       method: 'PUT',
       path: '/profile',
       body: {
         'city': city,
-        'sport': sport,
+        'sport': normalizedSports.isNotEmpty ? normalizedSports.first : '',
+        'sports': normalizedSports,
         'skillLevel': skillLevel,
         'availabilityDays': availabilityDays,
       },
@@ -244,6 +282,85 @@ class SportsApi {
     return Map<String, dynamic>.from(raw as Map);
   }
 
+  Future<Map<String, dynamic>> createSessionPlan({
+    required DateTime scheduledAt,
+    required String area,
+    required String sport,
+    required String skillLevel,
+    required int maxPlayers,
+  }) async {
+    final raw = await _authorizedRequest(
+      method: 'POST',
+      path: '/sessions/plans',
+      body: {
+        'scheduledAt': scheduledAt.toIso8601String(),
+        'area': area,
+        'sport': sport,
+        'skillLevel': skillLevel,
+        'maxPlayers': maxPlayers,
+      },
+    );
+
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> mySessionPlans() async {
+    final raw = await _authorizedRequest(
+      method: 'GET',
+      path: '/sessions/plans/mine',
+    );
+
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> discoverSessionPlans() async {
+    final raw = await _authorizedRequest(
+      method: 'GET',
+      path: '/sessions/plans/discover',
+    );
+
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> joinSessionPlan({
+    required String planId,
+  }) async {
+    final raw = await _authorizedRequest(
+      method: 'POST',
+      path: '/sessions/plans/$planId/join',
+    );
+
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<Map<String, dynamic>> leaveSessionPlan({
+    required String planId,
+  }) async {
+    final raw = await _authorizedRequest(
+      method: 'DELETE',
+      path: '/sessions/plans/$planId/join',
+    );
+
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<Map<String, dynamic>> updateSessionPlanStatus({
+    required String planId,
+    required String status,
+  }) async {
+    final raw = await _authorizedRequest(
+      method: 'PATCH',
+      path: '/sessions/plans/$planId/status',
+      body: {'status': status},
+    );
+
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
   Future<dynamic> _authorizedRequest({
     required String method,
     required String path,
@@ -314,6 +431,8 @@ class SportsApi {
         return _client.post(uri, headers: headers, body: jsonEncode(body ?? {}));
       case 'PUT':
         return _client.put(uri, headers: headers, body: jsonEncode(body ?? {}));
+      case 'PATCH':
+        return _client.patch(uri, headers: headers, body: jsonEncode(body ?? {}));
       case 'DELETE':
         return _client.delete(uri, headers: headers);
       default:

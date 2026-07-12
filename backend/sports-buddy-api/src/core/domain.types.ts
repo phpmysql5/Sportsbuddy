@@ -7,6 +7,7 @@ export interface User {
   name: string;
   city?: string;
   sport?: string;
+  sports?: string[];
   skillLevel?: SkillLevel;
   availabilityDays?: string[];
 }
@@ -17,6 +18,7 @@ export interface PublicUser {
   name: string;
   city?: string;
   sport?: string;
+  sports?: string[];
   skillLevel?: SkillLevel;
   availabilityDays?: string[];
 }

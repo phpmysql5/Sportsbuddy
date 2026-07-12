@@ -186,6 +186,7 @@ export class AuthService {
       name: user.name,
       city: user.city,
       sport: user.sport,
+      sports: user.sports,
       skillLevel: user.skillLevel,
       availabilityDays: user.availabilityDays,
     };
@@ -207,6 +208,12 @@ export class AuthService {
       name: user.name,
       city: user.city,
       sport: user.sport,
+      sports:
+        user.sports.length > 0
+          ? user.sports
+          : user.sport
+            ? [user.sport]
+            : [],
       skillLevel: user.skillLevel,
       availabilityDays: user.availabilityDays,
     };

@@ -312,6 +312,7 @@ describe('Sports Buddy API (e2e)', () => {
     const unique = Date.now().toString();
     const city = `E2ECity-${unique}`;
     const sport = `E2ESport-${unique}`;
+    const alternateSport = `E2EAltSport-${unique}`;
 
     const userAEmail = `match-a-${unique}@e2e.sportsbuddy.dev`;
     const userBEmail = `match-b-${unique}@e2e.sportsbuddy.dev`;
@@ -342,7 +343,7 @@ describe('Sports Buddy API (e2e)', () => {
       .set('Authorization', `Bearer ${userABody.accessToken}`)
       .send({
         city,
-        sport,
+        sports: [sport, alternateSport],
         skillLevel: 'beginner',
         availabilityDays: ['Sat', 'Sun'],
       })
@@ -353,7 +354,7 @@ describe('Sports Buddy API (e2e)', () => {
       .set('Authorization', `Bearer ${userBBody.accessToken}`)
       .send({
         city,
-        sport,
+        sports: [sport],
         skillLevel: 'intermediate',
         availabilityDays: ['Fri', 'Sat'],
       })
@@ -421,7 +422,7 @@ describe('Sports Buddy API (e2e)', () => {
       .set('Authorization', `Bearer ${userA.accessToken}`)
       .send({
         city: 'CityOne',
-        sport: 'Tennis',
+        sports: ['Tennis'],
         skillLevel: 'intermediate',
         availabilityDays: ['Sat'],
       })
@@ -432,7 +433,7 @@ describe('Sports Buddy API (e2e)', () => {
       .set('Authorization', `Bearer ${userB.accessToken}`)
       .send({
         city: 'CityTwo',
-        sport: 'Cricket',
+        sports: ['Cricket'],
         skillLevel: 'intermediate',
         availabilityDays: ['Sat'],
       })
@@ -468,7 +469,7 @@ describe('Sports Buddy API (e2e)', () => {
       .set('Authorization', `Bearer ${userA.accessToken}`)
       .send({
         city: 'Mangalore',
-        sport: 'TENNIS',
+        sports: ['TENNIS'],
         skillLevel: 'beginner',
         availabilityDays: ['Sat'],
       })
@@ -479,7 +480,7 @@ describe('Sports Buddy API (e2e)', () => {
       .set('Authorization', `Bearer ${userB.accessToken}`)
       .send({
         city: 'mangalore',
-        sport: 'tennis',
+        sports: ['tennis'],
         skillLevel: 'intermediate',
         availabilityDays: ['Sat'],
       })
@@ -680,7 +681,7 @@ describe('Sports Buddy API (e2e)', () => {
       .set('Authorization', `Bearer ${userA.accessToken}`)
       .send({
         city: 'Safety City',
-        sport: 'Badminton',
+        sports: ['Badminton'],
         skillLevel: 'beginner',
         availabilityDays: ['Sat'],
       })
@@ -691,7 +692,7 @@ describe('Sports Buddy API (e2e)', () => {
       .set('Authorization', `Bearer ${userB.accessToken}`)
       .send({
         city: 'Safety City',
-        sport: 'Badminton',
+        sports: ['Badminton'],
         skillLevel: 'beginner',
         availabilityDays: ['Sat'],
       })
@@ -886,6 +887,122 @@ describe('Sports Buddy API (e2e)', () => {
       .set('Authorization', `Bearer ${userA.accessToken}`)
       .send({ content: 'hello there' })
       .expect(400);
+  });
+
+  it('creates, discovers, joins, leaves, and updates session plans', async () => {
+    const unique = Date.now().toString();
+    const password = 'Password123!';
+
+    const creator = await registerUser(app, {
+      name: 'Plan Creator',
+      email: `plan-a-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+    const buddy = await registerUser(app, {
+      name: 'Plan Buddy',
+      email: `plan-b-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+    const outsider = await registerUser(app, {
+      name: 'Plan Outsider',
+      email: `plan-c-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+
+    const buddyMe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${buddy.accessToken}`)
+      .expect(200);
+    const buddyId = readString(asRecord(buddyMe.body), 'id');
+
+    const outsiderMe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${outsider.accessToken}`)
+      .expect(200);
+    const outsiderId = readString(asRecord(outsiderMe.body), 'id');
+
+    const connectResp = await request(app.getHttpServer())
+      .post('/connections/requests')
+      .set('Authorization', `Bearer ${creator.accessToken}`)
+      .send({ receiverId: buddyId })
+      .expect(201);
+    const requestId = toConnectionRequestBody(connectResp.body).id;
+
+    await request(app.getHttpServer())
+      .post(`/connections/requests/${requestId}/respond`)
+      .set('Authorization', `Bearer ${buddy.accessToken}`)
+      .send({ action: 'accept' })
+      .expect(201);
+
+    const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+
+    const createdPlanResp = await request(app.getHttpServer())
+      .post('/sessions/plans')
+      .set('Authorization', `Bearer ${creator.accessToken}`)
+      .send({
+        scheduledAt,
+        area: 'Koramangala 4th Block',
+        sport: 'Pickleball',
+        skillLevel: 'intermediate',
+        maxPlayers: 4,
+      })
+      .expect(201);
+
+    const createdPlan = asRecord(createdPlanResp.body);
+    const planId = readString(createdPlan, 'id');
+    expect(readString(createdPlan, 'status')).toBe('open');
+
+    const discoverForBuddy = await request(app.getHttpServer())
+      .get('/sessions/plans/discover')
+      .set('Authorization', `Bearer ${buddy.accessToken}`)
+      .expect(200);
+    const discoverPlans = toRecordArray(discoverForBuddy.body);
+    expect(discoverPlans).toHaveLength(1);
+    expect(readString(discoverPlans[0], 'id')).toBe(planId);
+
+    const discoverForOutsider = await request(app.getHttpServer())
+      .get('/sessions/plans/discover')
+      .set('Authorization', `Bearer ${outsider.accessToken}`)
+      .expect(200);
+    expect(toRecordArray(discoverForOutsider.body)).toHaveLength(0);
+
+    await request(app.getHttpServer())
+      .post(`/sessions/plans/${planId}/join`)
+      .set('Authorization', `Bearer ${buddy.accessToken}`)
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/sessions/plans/${planId}/join`)
+      .set('Authorization', `Bearer ${outsider.accessToken}`)
+      .expect(400);
+
+    const mineForBuddy = await request(app.getHttpServer())
+      .get('/sessions/plans/mine')
+      .set('Authorization', `Bearer ${buddy.accessToken}`)
+      .expect(200);
+    const buddyPlans = toRecordArray(mineForBuddy.body);
+    expect(buddyPlans).toHaveLength(1);
+    expect(readString(buddyPlans[0], 'id')).toBe(planId);
+
+    await request(app.getHttpServer())
+      .patch(`/sessions/plans/${planId}/status`)
+      .set('Authorization', `Bearer ${creator.accessToken}`)
+      .send({ status: 'confirmed' })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .delete(`/sessions/plans/${planId}/join`)
+      .set('Authorization', `Bearer ${buddy.accessToken}`)
+      .expect(200)
+      .expect({ success: true });
+
+    await request(app.getHttpServer())
+      .patch(`/sessions/plans/${planId}/status`)
+      .set('Authorization', `Bearer ${outsider.accessToken}`)
+      .send({ status: 'completed' })
+      .expect(400);
+
+    expect(outsiderId.length).toBeGreaterThan(5);
   });
 
   afterAll(async () => {

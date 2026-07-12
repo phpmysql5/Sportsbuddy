@@ -14,6 +14,19 @@ function normalize(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase();
 }
 
+function normalizeSports(sports: string[], sport: string | null): Set<string> {
+  const normalized = sports
+    .map((value) => normalize(value))
+    .filter((value) => value.length > 0);
+
+  if (normalized.length > 0) {
+    return new Set(normalized);
+  }
+
+  const legacy = normalize(sport);
+  return legacy.length > 0 ? new Set([legacy]) : new Set<string>();
+}
+
 @Injectable()
 export class MatchingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -63,16 +76,19 @@ export class MatchingService {
 
   private isCompatible(current: User, candidate: User): boolean {
     const currentCity = normalize(current.city);
-    const currentSport = normalize(current.sport);
+    const currentSports = normalizeSports(current.sports, current.sport);
     const candidateCity = normalize(candidate.city);
-    const candidateSport = normalize(candidate.sport);
+    const candidateSports = normalizeSports(candidate.sports, candidate.sport);
+    const hasSportOverlap = Array.from(currentSports).some((sport) =>
+      candidateSports.has(sport),
+    );
 
     return (
       currentCity.length > 0 &&
-      currentSport.length > 0 &&
+      currentSports.size > 0 &&
       !!current.skillLevel &&
       currentCity === candidateCity &&
-      currentSport === candidateSport &&
+      hasSportOverlap &&
       !!candidate.skillLevel &&
       Math.abs(
         skillScore[current.skillLevel] - skillScore[candidate.skillLevel],

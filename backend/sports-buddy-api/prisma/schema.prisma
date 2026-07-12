@@ -27,6 +27,13 @@ enum ReportReason {
   other
 }
 
+enum SessionPlanStatus {
+  open
+  confirmed
+  completed
+  cancelled
+}
+
 model User {
   id               String      @id @default(uuid())
   email            String      @unique
@@ -35,6 +42,7 @@ model User {
   name             String
   city             String?
   sport            String?
+  sports           String[]    @default([])
   skillLevel       SkillLevel?
   availabilityDays String[]
   sentRequests     ConnectionRequest[] @relation("ConnectionSender")
@@ -45,6 +53,8 @@ model User {
   receivedReports  UserReport[]        @relation("ReportedUser")
   sentMessages     BuddyMessage[]      @relation("BuddyMessageSender")
   receivedMessages BuddyMessage[]      @relation("BuddyMessageReceiver")
+  createdPlans     SessionPlan[]       @relation("SessionPlanCreator")
+  joinedPlans      SessionPlanParticipant[]
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 }
@@ -105,4 +115,36 @@ model BuddyMessage {
 
   @@index([senderId, receiverId, createdAt])
   @@index([receiverId, senderId, createdAt])
+}
+
+model SessionPlan {
+  id         String            @id @default(uuid())
+  creatorId  String
+  scheduledAt DateTime
+  area       String
+  sport      String
+  skillLevel SkillLevel
+  maxPlayers Int
+  status     SessionPlanStatus @default(open)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  creator      User                     @relation("SessionPlanCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  participants SessionPlanParticipant[]
+
+  @@index([creatorId, scheduledAt])
+  @@index([status, scheduledAt])
+}
+
+model SessionPlanParticipant {
+  id        String   @id @default(uuid())
+  sessionId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  session SessionPlan @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([userId, createdAt])
 }

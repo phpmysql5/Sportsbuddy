@@ -222,3 +222,54 @@ Chat notes:
 - chat is currently available only between connected buddies.
 - blocked pairs cannot send or view chat messages.
 - `limit` is clamped to 1..50.
+
+## Session Planning
+
+POST /sessions/plans
+- auth: Bearer access token
+- body
+```json
+{
+  "scheduledAt": "2026-07-20T06:30:00.000Z",
+  "area": "Koramangala 4th Block",
+  "sport": "Pickleball",
+  "skillLevel": "intermediate",
+  "maxPlayers": 4
+}
+```
+- response 201 SessionPlan
+
+GET /sessions/plans/mine
+- auth: Bearer access token
+- response 200 SessionPlan[]
+
+GET /sessions/plans/discover
+- auth: Bearer access token
+- response 200 SessionPlan[]
+
+POST /sessions/plans/:planId/join
+- auth: Bearer access token
+- response 201 SessionPlan
+
+DELETE /sessions/plans/:planId/join
+- auth: Bearer access token
+- response 200
+```json
+{ "success": true }
+```
+
+PATCH /sessions/plans/:planId/status
+- auth: Bearer access token
+- body
+```json
+{ "status": "confirmed" }
+```
+- allowed status values: open, confirmed, completed, cancelled
+- response 200 SessionPlan
+
+Session planning notes:
+- discover returns only open plans from connected buddies.
+- creator is auto-added as first participant when plan is created.
+- only connected buddies can join a plan.
+- maxPlayers is enforced when joining.
+- only plan creator can update plan status.

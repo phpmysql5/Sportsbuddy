@@ -41,12 +41,15 @@ export class MemoryStoreService {
   }
 
   toPublicUser(user: User): PublicUser {
+    const sports = user.sports ?? (user.sport ? [user.sport] : []);
+
     return {
       id: user.id,
       email: user.email,
       name: user.name,
       city: user.city,
-      sport: user.sport,
+      sport: sports[0],
+      sports,
       skillLevel: user.skillLevel,
       availabilityDays: user.availabilityDays,
     };
@@ -56,7 +59,7 @@ export class MemoryStoreService {
     userId: string,
     profile: {
       city: string;
-      sport: string;
+      sports: string[];
       skillLevel: SkillLevel;
       availabilityDays?: string[];
     },
@@ -67,7 +70,8 @@ export class MemoryStoreService {
     }
 
     user.city = profile.city;
-    user.sport = profile.sport;
+    user.sports = profile.sports;
+    user.sport = profile.sports[0];
     user.skillLevel = profile.skillLevel;
     user.availabilityDays = profile.availabilityDays ?? [];
 
