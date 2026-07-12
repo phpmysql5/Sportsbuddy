@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -90,6 +90,18 @@ function toSuggestionsBody(body: unknown): SuggestionBody[] {
   });
 }
 
+async function registerUser(
+  app: INestApplication<App>,
+  { name, email, password }: { name: string; email: string; password: string },
+): Promise<AuthResponseBody> {
+  const response = await request(app.getHttpServer())
+    .post('/auth/register')
+    .send({ name, email, password })
+    .expect(201);
+
+  return toAuthResponseBody(response.body);
+}
+
 describe('Sports Buddy API (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -100,6 +112,13 @@ describe('Sports Buddy API (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     prisma = app.get(PrismaService);
     await app.init();
   });
@@ -115,6 +134,61 @@ describe('Sports Buddy API (e2e)', () => {
       .get('/health')
       .expect(200)
       .expect({ status: 'ok' });
+  });
+
+  it('rejects duplicate registration for same email', async () => {
+    const email = `dup-${Date.now()}@e2e.sportsbuddy.dev`;
+    const password = 'Password123!';
+
+    await registerUser(app, {
+      name: 'E2E Duplicate User',
+      email,
+      password,
+    });
+
+    const duplicateResponse = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({
+        name: 'Another User',
+        email,
+        password,
+      })
+      .expect(400);
+
+    const duplicateBody = asRecord(duplicateResponse.body);
+    expect(readString(duplicateBody, 'message')).toContain(
+      'Email is already registered',
+    );
+  });
+
+  it('rejects login with wrong password', async () => {
+    const email = `login-${Date.now()}@e2e.sportsbuddy.dev`;
+    const password = 'Password123!';
+
+    await registerUser(app, {
+      name: 'E2E Login User',
+      email,
+      password,
+    });
+
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password: 'WrongPassword123!' })
+      .expect(401);
+  });
+
+  it('blocks protected endpoints without access token', async () => {
+    await request(app.getHttpServer()).get('/auth/me').expect(401);
+    await request(app.getHttpServer()).get('/matching/suggestions').expect(401);
+    await request(app.getHttpServer())
+      .put('/profile')
+      .send({
+        city: 'Mangalore',
+        sport: 'Tennis',
+        skillLevel: 'beginner',
+        availabilityDays: ['Sat'],
+      })
+      .expect(401);
   });
 
   it('registers, authenticates, refreshes, and revokes tokens', async () => {
@@ -235,6 +309,75 @@ describe('Sports Buddy API (e2e)', () => {
         'Shared availability',
       ]),
     );
+  });
+
+  it('rejects invalid profile payload', async () => {
+    const email = `bad-profile-${Date.now()}@e2e.sportsbuddy.dev`;
+    const password = 'Password123!';
+
+    const authBody = await registerUser(app, {
+      name: 'E2E Bad Profile User',
+      email,
+      password,
+    });
+
+    await request(app.getHttpServer())
+      .put('/profile')
+      .set('Authorization', `Bearer ${authBody.accessToken}`)
+      .send({
+        city: 'A',
+        sport: 'B',
+        skillLevel: 'expert',
+        availabilityDays: ['Mon'],
+      })
+      .expect(400);
+  });
+
+  it('returns no suggestions for incompatible city/sport', async () => {
+    const unique = Date.now().toString();
+    const password = 'Password123!';
+
+    const userA = await registerUser(app, {
+      name: 'E2E No Match A',
+      email: `nomatch-a-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+
+    const userB = await registerUser(app, {
+      name: 'E2E No Match B',
+      email: `nomatch-b-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+
+    await request(app.getHttpServer())
+      .put('/profile')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .send({
+        city: 'CityOne',
+        sport: 'Tennis',
+        skillLevel: 'intermediate',
+        availabilityDays: ['Sat'],
+      })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .put('/profile')
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .send({
+        city: 'CityTwo',
+        sport: 'Cricket',
+        skillLevel: 'intermediate',
+        availabilityDays: ['Sat'],
+      })
+      .expect(200);
+
+    const suggestionsResponse = await request(app.getHttpServer())
+      .get('/matching/suggestions')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+
+    const suggestions = toSuggestionsBody(suggestionsResponse.body);
+    expect(suggestions).toHaveLength(0);
   });
 
   afterAll(async () => {
