@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
+import { Prisma } from '@prisma/client';
 import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from '../database/prisma.service';
 import { GoogleAuthDto } from './dto/google-auth.dto';
@@ -42,13 +43,25 @@ export class AuthService {
 
     const passwordHash = await argon2.hash(dto.password);
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email.toLowerCase(),
-        passwordHash,
-        name: dto.name,
-      },
-    });
+    let user: Awaited<ReturnType<typeof this.prisma.user.create>>;
+
+    try {
+      user = await this.prisma.user.create({
+        data: {
+          email: dto.email.toLowerCase(),
+          passwordHash,
+          name: dto.name,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException('Email is already registered');
+      }
+      throw error;
+    }
 
     const tokens = await this.issueTokens(user.id, user.email);
     await this.storeRefreshTokenHash(user.id, tokens.refreshToken);

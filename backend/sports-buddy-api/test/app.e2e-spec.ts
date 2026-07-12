@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import type { Response } from 'superagent';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 
@@ -159,6 +160,33 @@ describe('Sports Buddy API (e2e)', () => {
     expect(readString(duplicateBody, 'message')).toContain(
       'Email is already registered',
     );
+  });
+
+  it('handles concurrent duplicate registration safely', async () => {
+    const email = `concurrent-${Date.now()}@e2e.sportsbuddy.dev`;
+    const password = 'Password123!';
+
+    const results = await Promise.allSettled([
+      request(app.getHttpServer()).post('/auth/register').send({
+        name: 'Concurrent User A',
+        email,
+        password,
+      }),
+      request(app.getHttpServer()).post('/auth/register').send({
+        name: 'Concurrent User B',
+        email,
+        password,
+      }),
+    ]);
+
+    const fulfilled = results
+      .filter(
+        (r): r is PromiseFulfilledResult<Response> => r.status === 'fulfilled',
+      )
+      .map((r) => r.value.status)
+      .sort((a, b) => a - b);
+
+    expect(fulfilled).toEqual([201, 400]);
   });
 
   it('rejects login with wrong password', async () => {
@@ -378,6 +406,58 @@ describe('Sports Buddy API (e2e)', () => {
 
     const suggestions = toSuggestionsBody(suggestionsResponse.body);
     expect(suggestions).toHaveLength(0);
+  });
+
+  it('matches users with case-insensitive city and sport values', async () => {
+    const unique = Date.now().toString();
+    const password = 'Password123!';
+
+    const userA = await registerUser(app, {
+      name: 'Case Match A',
+      email: `case-a-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+
+    const userB = await registerUser(app, {
+      name: 'Case Match B',
+      email: `case-b-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+
+    await request(app.getHttpServer())
+      .put('/profile')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .send({
+        city: 'Mangalore',
+        sport: 'TENNIS',
+        skillLevel: 'beginner',
+        availabilityDays: ['Sat'],
+      })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .put('/profile')
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .send({
+        city: 'mangalore',
+        sport: 'tennis',
+        skillLevel: 'intermediate',
+        availabilityDays: ['Sat'],
+      })
+      .expect(200);
+
+    const suggestionsResponse = await request(app.getHttpServer())
+      .get('/matching/suggestions')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+
+    const suggestions = toSuggestionsBody(suggestionsResponse.body);
+    const buddy = suggestions.find(
+      (candidate) =>
+        candidate.user.email === `case-b-${unique}@e2e.sportsbuddy.dev`,
+    );
+
+    expect(buddy).toBeDefined();
   });
 
   afterAll(async () => {

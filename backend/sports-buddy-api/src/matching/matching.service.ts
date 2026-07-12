@@ -10,6 +10,10 @@ const skillScore: Record<SkillLevel, number> = {
   advanced: 3,
 };
 
+function normalize(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
 @Injectable()
 export class MatchingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -32,12 +36,17 @@ export class MatchingService {
   }
 
   private isCompatible(current: AuthenticatedUser, candidate: User): boolean {
+    const currentCity = normalize(current.city);
+    const currentSport = normalize(current.sport);
+    const candidateCity = normalize(candidate.city);
+    const candidateSport = normalize(candidate.sport);
+
     return (
-      !!current.city &&
-      !!current.sport &&
+      currentCity.length > 0 &&
+      currentSport.length > 0 &&
       !!current.skillLevel &&
-      current.city === candidate.city &&
-      current.sport === candidate.sport &&
+      currentCity === candidateCity &&
+      currentSport === candidateSport &&
       !!candidate.skillLevel &&
       Math.abs(
         skillScore[current.skillLevel] - skillScore[candidate.skillLevel],
