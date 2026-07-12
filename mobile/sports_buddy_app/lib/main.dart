@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -167,7 +168,7 @@ class _AuthScreenState extends State<AuthScreen> {
       widget.onSuccess(Map<String, dynamic>.from(data['user']));
     } catch (e) {
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = _toUserMessage(e);
       });
     } finally {
       setState(() {
@@ -203,7 +204,7 @@ class _AuthScreenState extends State<AuthScreen> {
       widget.onSuccess(Map<String, dynamic>.from(data['user']));
     } catch (e) {
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = _toUserMessage(e);
       });
     } finally {
       setState(() {
@@ -315,6 +316,34 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       ),
     );
+  }
+
+  String _toUserMessage(Object error) {
+    if (error is PlatformException) {
+      final message = (error.message ?? '').toLowerCase();
+      if (error.code == 'sign_in_failed' || message.contains('api10')) {
+        return 'Google sign-in is not configured correctly yet. Please try again in a minute.';
+      }
+      if (error.code == 'network_error' || message.contains('network')) {
+        return 'Network issue while contacting Google. Check internet and retry.';
+      }
+      return 'Google sign-in failed. Please try again.';
+    }
+
+    final text = error.toString().replaceFirst('Exception: ', '');
+    if (text.contains('Invalid email or password')) {
+      return 'Invalid email or password.';
+    }
+    if (text.contains('Email is already registered')) {
+      return 'Email is already registered. Please login.';
+    }
+    if (text.contains('Invalid Google ID token')) {
+      return 'Google sign-in token was rejected. Please sign in again.';
+    }
+    if (text.contains('Missing auth session')) {
+      return 'Your session expired. Please sign in again.';
+    }
+    return text;
   }
 }
 
@@ -779,7 +808,11 @@ class SportsApi {
     }
 
     if (decoded is Map && decoded['message'] != null) {
-      throw Exception(decoded['message'].toString());
+      final message = decoded['message'];
+      if (message is List) {
+        throw Exception(message.join(', '));
+      }
+      throw Exception(message.toString());
     }
     throw Exception('Request failed with status ${response.statusCode}');
   }
