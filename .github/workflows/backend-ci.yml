@@ -1,15 +1,17 @@
-name: Backend CI
+name: Monorepo CI
 
 on:
   push:
     branches: [main]
     paths:
       - 'backend/sports-buddy-api/**'
+      - 'mobile/sports_buddy_app/**'
       - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'backend/sports-buddy-api/**'
+      - 'mobile/sports_buddy_app/**'
       - '.github/workflows/backend-ci.yml'
 
 jobs:
@@ -47,3 +49,27 @@ jobs:
 
       - name: E2E tests
         run: npm run test:e2e -- --runInBand
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/sports_buddy_app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
