@@ -19,23 +19,49 @@ export class MatchingService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getSuggestions(user: AuthenticatedUser): Promise<MatchSuggestion[]> {
-    const users = await this.prisma.user.findMany();
-
-    const current = users.find((candidate) => candidate.id === user.id);
+    const current = await this.prisma.user.findUnique({
+      where: { id: user.id },
+    });
     if (!current) {
       return [];
     }
 
+    const blocked = await this.prisma.userBlock.findMany({
+      where: {
+        OR: [{ blockerId: user.id }, { blockedId: user.id }],
+      },
+      select: {
+        blockerId: true,
+        blockedId: true,
+      },
+    });
+
+    const excludedIds = new Set<string>([user.id]);
+    for (const relation of blocked) {
+      excludedIds.add(
+        relation.blockerId === user.id
+          ? relation.blockedId
+          : relation.blockerId,
+      );
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: {
+          notIn: Array.from(excludedIds),
+        },
+      },
+    });
+
     const candidates = users
-      .filter((candidate) => candidate.id !== user.id)
-      .filter((candidate) => this.isCompatible(user, candidate))
-      .map((candidate) => this.toSuggestion(user, candidate))
+      .filter((candidate) => this.isCompatible(current, candidate))
+      .map((candidate) => this.toSuggestion(current, candidate))
       .sort((a, b) => b.score - a.score);
 
     return candidates;
   }
 
-  private isCompatible(current: AuthenticatedUser, candidate: User): boolean {
+  private isCompatible(current: User, candidate: User): boolean {
     const currentCity = normalize(current.city);
     const currentSport = normalize(current.sport);
     const candidateCity = normalize(candidate.city);
@@ -55,7 +81,7 @@ export class MatchingService {
   }
 
   private toSuggestion(
-    current: AuthenticatedUser,
+    current: User,
     candidate: User,
   ): MatchSuggestion {
     const reasons = ['Same city', 'Same sport'];

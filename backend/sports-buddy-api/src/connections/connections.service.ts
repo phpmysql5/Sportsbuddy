@@ -14,6 +14,38 @@ import type { SendRequestDto } from './dto/send-request.dto';
 export class ConnectionsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async hasBlockBetween(userAId: string, userBId: string) {
+    const block = await this.prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: userAId, blockedId: userBId },
+          { blockerId: userBId, blockedId: userAId },
+        ],
+      },
+      select: { id: true },
+    });
+
+    return !!block;
+  }
+
+  private async blockedCounterpartIds(userId: string): Promise<Set<string>> {
+    const relations = await this.prisma.userBlock.findMany({
+      where: {
+        OR: [{ blockerId: userId }, { blockedId: userId }],
+      },
+      select: {
+        blockerId: true,
+        blockedId: true,
+      },
+    });
+
+    return new Set(
+      relations.map((relation) =>
+        relation.blockerId === userId ? relation.blockedId : relation.blockerId,
+      ),
+    );
+  }
+
   async sendRequest(user: AuthenticatedUser, dto: SendRequestDto) {
     if (dto.receiverId === user.id) {
       throw new BadRequestException('You cannot send request to yourself');
@@ -24,6 +56,10 @@ export class ConnectionsService {
     });
     if (!receiver) {
       throw new NotFoundException('Receiver not found');
+    }
+
+    if (await this.hasBlockBetween(user.id, dto.receiverId)) {
+      throw new BadRequestException('Cannot send request to blocked user');
     }
 
     const existing = await this.prisma.connectionRequest.findFirst({
@@ -64,6 +100,8 @@ export class ConnectionsService {
   }
 
   async incomingRequests(user: AuthenticatedUser) {
+    const blockedIds = await this.blockedCounterpartIds(user.id);
+
     const requests = await this.prisma.connectionRequest.findMany({
       where: {
         receiverId: user.id,
@@ -75,15 +113,19 @@ export class ConnectionsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return requests.map((request) => ({
-      id: request.id,
-      status: request.status,
-      sender: toPublicUser(request.sender),
-      createdAt: request.createdAt,
-    }));
+    return requests
+      .filter((request) => !blockedIds.has(request.senderId))
+      .map((request) => ({
+        id: request.id,
+        status: request.status,
+        sender: toPublicUser(request.sender),
+        createdAt: request.createdAt,
+      }));
   }
 
   async outgoingRequests(user: AuthenticatedUser) {
+    const blockedIds = await this.blockedCounterpartIds(user.id);
+
     const requests = await this.prisma.connectionRequest.findMany({
       where: {
         senderId: user.id,
@@ -95,12 +137,14 @@ export class ConnectionsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return requests.map((request) => ({
-      id: request.id,
-      status: request.status,
-      receiver: toPublicUser(request.receiver),
-      createdAt: request.createdAt,
-    }));
+    return requests
+      .filter((request) => !blockedIds.has(request.receiverId))
+      .map((request) => ({
+        id: request.id,
+        status: request.status,
+        receiver: toPublicUser(request.receiver),
+        createdAt: request.createdAt,
+      }));
   }
 
   async respond(
@@ -122,6 +166,10 @@ export class ConnectionsService {
 
     if (request.status !== 'pending') {
       throw new BadRequestException('Request already processed');
+    }
+
+    if (await this.hasBlockBetween(request.senderId, request.receiverId)) {
+      throw new BadRequestException('Cannot respond to blocked user request');
     }
 
     const status: ConnectionRequestStatus =
@@ -146,6 +194,8 @@ export class ConnectionsService {
   }
 
   async buddies(user: AuthenticatedUser) {
+    const blockedIds = await this.blockedCounterpartIds(user.id);
+
     const requests = await this.prisma.connectionRequest.findMany({
       where: {
         status: 'accepted',
@@ -158,11 +208,17 @@ export class ConnectionsService {
       orderBy: { updatedAt: 'desc' },
     });
 
-    return requests.map((request) => {
-      const buddy =
-        request.senderId === user.id ? request.receiver : request.sender;
-      return toPublicUser(buddy);
-    });
+    return requests
+      .filter((request) => {
+        const buddyId =
+          request.senderId === user.id ? request.receiverId : request.senderId;
+        return !blockedIds.has(buddyId);
+      })
+      .map((request) => {
+        const buddy =
+          request.senderId === user.id ? request.receiver : request.sender;
+        return toPublicUser(buddy);
+      });
   }
 
   async cancelOutgoing(user: AuthenticatedUser, requestId: string) {

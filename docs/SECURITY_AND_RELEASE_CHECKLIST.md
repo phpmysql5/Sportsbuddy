@@ -24,6 +24,13 @@
 - Route-level throttling enabled for register/login/google/refresh.
 - Monitor repeated 401/429 responses and block abusive IPs if needed.
 
+## Safety abuse controls
+
+- Keep report endpoint throttle active (3/minute per client key).
+- Verify block and report actions reject self-targeting requests.
+- Confirm blocked users are excluded from suggestions and connection interactions.
+- Review report volume trends during pilot for spam patterns.
+
 ## Database migration flow
 
 - Local development:
@@ -49,4 +56,6 @@ Do not use prisma db push against production databases.
 - Register/login/logout/refresh flow works.
 - Profile update validates and saves correctly.
 - Suggestions return expected matches.
+- Block user removes them from suggestions and connection lists.
+- Report user returns success and enforces 429 on burst reporting.
 - Google sign-in end to end works with live client IDs.

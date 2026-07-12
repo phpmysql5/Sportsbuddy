@@ -35,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final Set<String> _sendingRequestIds = <String>{};
   final Set<String> _cancelingRequestIds = <String>{};
   final Set<String> _removingBuddyIds = <String>{};
+  final Set<String> _safetyActionUserIds = <String>{};
 
   @override
   void initState() {
@@ -259,6 +260,107 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _blockUser(String userId) async {
+    setState(() {
+      _safetyActionUserIds.add(userId);
+    });
+
+    try {
+      await widget.api.blockUser(userId: userId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = 'User blocked';
+      });
+      await _loadSuggestions();
+      await _loadConnections();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _safetyActionUserIds.remove(userId);
+        });
+      }
+    }
+  }
+
+  Future<void> _reportUser(String userId) async {
+    final reason = await _pickReportReason();
+    if (reason == null) {
+      return;
+    }
+
+    setState(() {
+      _safetyActionUserIds.add(userId);
+    });
+
+    try {
+      await widget.api.reportUser(userId: userId, reason: reason);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = 'Report submitted';
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _safetyActionUserIds.remove(userId);
+        });
+      }
+    }
+  }
+
+  Future<String?> _pickReportReason() async {
+    final reasons = <String, String>{
+      'harassment': 'Harassment',
+      'inappropriate_behavior': 'Inappropriate behavior',
+      'fraud': 'Fraud',
+      'spam': 'Spam',
+      'other': 'Other',
+    };
+
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Report user'),
+        children: reasons.entries
+            .map(
+              (entry) => SimpleDialogOption(
+                onPressed: () => Navigator.of(ctx).pop(entry.key),
+                child: Text(entry.value),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  Future<void> _onSafetyAction(String action, String userId) async {
+    if (action == 'block') {
+      await _blockUser(userId);
+      return;
+    }
+
+    if (action == 'report') {
+      await _reportUser(userId);
+    }
+  }
+
   bool _isConnected(String userId) {
     return _buddies.any((buddy) => buddy['id']?.toString() == userId);
   }
@@ -411,6 +513,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       userId.isNotEmpty && _hasIncomingRequestFrom(userId);
                   final isSending =
                       userId.isNotEmpty && _sendingRequestIds.contains(userId);
+                  final isSafetyBusy =
+                    userId.isNotEmpty && _safetyActionUserIds.contains(userId);
 
                   Widget actionButton;
                   if (isConnected) {
@@ -430,7 +534,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   } else {
                     actionButton = FilledButton(
-                      onPressed: (isSending || userId.isEmpty)
+                      onPressed: (isSending || userId.isEmpty || isSafetyBusy)
                           ? null
                           : () => _sendRequest(userId),
                       child: Text(isSending ? 'Sending...' : 'Send Request'),
@@ -457,6 +561,22 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             const SizedBox(height: 8),
                             actionButton,
+                            PopupMenuButton<String>(
+                              tooltip: 'Safety actions',
+                              enabled: userId.isNotEmpty && !isSafetyBusy,
+                              onSelected: (value) =>
+                                  _onSafetyAction(value, userId),
+                              itemBuilder: (_) => const [
+                                PopupMenuItem<String>(
+                                  value: 'report',
+                                  child: Text('Report user'),
+                                ),
+                                PopupMenuItem<String>(
+                                  value: 'block',
+                                  child: Text('Block user'),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -493,43 +613,71 @@ class _HomeScreenState extends State<HomeScreen> {
                 )
               else
                 ..._incomingRequests.map(
-                  (request) => Card(
-                    child: ListTile(
-                      title: Text(
-                        (request['sender']?['name'] ?? 'Unknown').toString(),
-                      ),
-                      subtitle: const Text('Incoming request'),
-                      trailing: Wrap(
-                        spacing: 8,
-                        children: [
-                          IconButton(
-                            tooltip: 'Reject',
-                            onPressed: () => _respondRequest(
-                              request['id'].toString(),
-                              'reject',
+                  (request) {
+                    final senderId = request['sender']?['id']?.toString() ?? '';
+                    final isSafetyBusy =
+                        senderId.isNotEmpty &&
+                        _safetyActionUserIds.contains(senderId);
+
+                    return Card(
+                      child: ListTile(
+                        title: Text(
+                          (request['sender']?['name'] ?? 'Unknown').toString(),
+                        ),
+                        subtitle: const Text('Incoming request'),
+                        trailing: Wrap(
+                          spacing: 8,
+                          children: [
+                            IconButton(
+                              tooltip: 'Reject',
+                              onPressed: () => _respondRequest(
+                                request['id'].toString(),
+                                'reject',
+                              ),
+                              icon: const Icon(Icons.close),
                             ),
-                            icon: const Icon(Icons.close),
-                          ),
-                          IconButton(
-                            tooltip: 'Accept',
-                            onPressed: () => _respondRequest(
-                              request['id'].toString(),
-                              'accept',
+                            IconButton(
+                              tooltip: 'Accept',
+                              onPressed: () => _respondRequest(
+                                request['id'].toString(),
+                                'accept',
+                              ),
+                              icon: const Icon(Icons.check),
                             ),
-                            icon: const Icon(Icons.check),
-                          ),
-                        ],
+                            PopupMenuButton<String>(
+                              tooltip: 'Safety actions',
+                              enabled: senderId.isNotEmpty && !isSafetyBusy,
+                              onSelected: (value) =>
+                                  _onSafetyAction(value, senderId),
+                              itemBuilder: (_) => const [
+                                PopupMenuItem<String>(
+                                  value: 'report',
+                                  child: Text('Report user'),
+                                ),
+                                PopupMenuItem<String>(
+                                  value: 'block',
+                                  child: Text('Block user'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               if (_outgoingRequests.isNotEmpty)
                 ..._outgoingRequests.map(
                   (request) {
                     final requestId = request['id']?.toString() ?? '';
+                    final receiverId =
+                        request['receiver']?['id']?.toString() ?? '';
                     final isCanceling =
                         requestId.isNotEmpty &&
                         _cancelingRequestIds.contains(requestId);
+                    final isSafetyBusy =
+                        receiverId.isNotEmpty &&
+                        _safetyActionUserIds.contains(receiverId);
 
                     return Card(
                       child: ListTile(
@@ -537,11 +685,34 @@ class _HomeScreenState extends State<HomeScreen> {
                           (request['receiver']?['name'] ?? 'Unknown').toString(),
                         ),
                         subtitle: const Text('Outgoing request (pending)'),
-                        trailing: TextButton(
-                          onPressed: (requestId.isEmpty || isCanceling)
-                              ? null
-                              : () => _cancelOutgoingRequest(requestId),
-                          child: Text(isCanceling ? 'Cancelling...' : 'Cancel'),
+                        trailing: Wrap(
+                          spacing: 6,
+                          children: [
+                            TextButton(
+                              onPressed: (requestId.isEmpty || isCanceling)
+                                  ? null
+                                  : () => _cancelOutgoingRequest(requestId),
+                              child: Text(
+                                isCanceling ? 'Cancelling...' : 'Cancel',
+                              ),
+                            ),
+                            PopupMenuButton<String>(
+                              tooltip: 'Safety actions',
+                              enabled: receiverId.isNotEmpty && !isSafetyBusy,
+                              onSelected: (value) =>
+                                  _onSafetyAction(value, receiverId),
+                              itemBuilder: (_) => const [
+                                PopupMenuItem<String>(
+                                  value: 'report',
+                                  child: Text('Report user'),
+                                ),
+                                PopupMenuItem<String>(
+                                  value: 'block',
+                                  child: Text('Block user'),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -567,6 +738,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   final buddyId = buddy['id']?.toString() ?? '';
                   final isRemoving =
                       buddyId.isNotEmpty && _removingBuddyIds.contains(buddyId);
+                  final isSafetyBusy =
+                      buddyId.isNotEmpty && _safetyActionUserIds.contains(buddyId);
 
                   return Card(
                     child: ListTile(
@@ -575,11 +748,32 @@ class _HomeScreenState extends State<HomeScreen> {
                         '${buddy['sport'] ?? '-'} in ${buddy['city'] ?? '-'}',
                       ),
                       leading: const Icon(Icons.people),
-                      trailing: TextButton(
-                        onPressed: (buddyId.isEmpty || isRemoving)
-                            ? null
-                            : () => _removeBuddy(buddyId),
-                        child: Text(isRemoving ? 'Removing...' : 'Remove'),
+                      trailing: Wrap(
+                        spacing: 6,
+                        children: [
+                          TextButton(
+                            onPressed: (buddyId.isEmpty || isRemoving)
+                                ? null
+                                : () => _removeBuddy(buddyId),
+                            child: Text(isRemoving ? 'Removing...' : 'Remove'),
+                          ),
+                          PopupMenuButton<String>(
+                            tooltip: 'Safety actions',
+                            enabled: buddyId.isNotEmpty && !isSafetyBusy,
+                            onSelected: (value) =>
+                                _onSafetyAction(value, buddyId),
+                            itemBuilder: (_) => const [
+                              PopupMenuItem<String>(
+                                value: 'report',
+                                child: Text('Report user'),
+                              ),
+                              PopupMenuItem<String>(
+                                value: 'block',
+                                child: Text('Block user'),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   );

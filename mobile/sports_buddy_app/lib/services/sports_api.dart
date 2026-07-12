@@ -172,6 +172,51 @@ class SportsApi {
         .toList();
   }
 
+  Future<Map<String, dynamic>> blockUser({
+    required String userId,
+  }) async {
+    final raw = await _authorizedRequest(
+      method: 'POST',
+      path: '/safety/blocks',
+      body: {'userId': userId},
+    );
+
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<Map<String, dynamic>> unblockUser({
+    required String userId,
+  }) async {
+    final raw = await _authorizedRequest(
+      method: 'DELETE',
+      path: '/safety/blocks/$userId',
+    );
+
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<Map<String, dynamic>> reportUser({
+    required String userId,
+    required String reason,
+    String? details,
+  }) async {
+    final payload = <String, dynamic>{
+      'userId': userId,
+      'reason': reason,
+    };
+    if (details != null && details.trim().isNotEmpty) {
+      payload['details'] = details.trim();
+    }
+
+    final raw = await _authorizedRequest(
+      method: 'POST',
+      path: '/safety/reports',
+      body: payload,
+    );
+
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
   Future<dynamic> _authorizedRequest({
     required String method,
     required String path,

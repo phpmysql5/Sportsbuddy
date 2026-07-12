@@ -7,6 +7,7 @@ import { ConnectionsModule } from './connections/connections.module';
 import { PrismaModule } from './database/prisma.module';
 import { MatchingModule } from './matching/matching.module';
 import { ProfileModule } from './profile/profile.module';
+import { SafetyModule } from './safety/safety.module';
 import { AppController } from './app.controller';
 
 function readEnvString(
@@ -67,6 +68,7 @@ function readNodeEnv(): string {
     ConnectionsModule,
     ProfileModule,
     MatchingModule,
+    SafetyModule,
   ],
   controllers: [AppController],
   providers: [

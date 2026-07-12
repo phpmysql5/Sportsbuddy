@@ -29,6 +29,11 @@ type ConnectionRequestBody = {
   status: string;
 };
 
+type ReportResponseBody = {
+  success: boolean;
+  reportId: string;
+};
+
 function asRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null) {
     throw new Error('Expected object response body');
@@ -110,6 +115,19 @@ function toRecordArray(body: unknown): Record<string, unknown>[] {
   }
 
   return body.map((entry) => asRecord(entry));
+}
+
+function toReportResponseBody(body: unknown): ReportResponseBody {
+  const record = asRecord(body);
+  const success = record.success;
+  if (typeof success !== 'boolean') {
+    throw new Error('Expected boolean field: success');
+  }
+
+  return {
+    success,
+    reportId: readString(record, 'reportId'),
+  };
 }
 
 async function registerUser(
@@ -628,6 +646,158 @@ describe('Sports Buddy API (e2e)', () => {
       .set('Authorization', `Bearer ${userB.accessToken}`)
       .expect(200);
     expect(toRecordArray(buddiesAfterRemoveB.body)).toHaveLength(0);
+  });
+
+  it('blocks users from suggestions and restores visibility after unblock', async () => {
+    const unique = Date.now().toString();
+    const password = 'Password123!';
+
+    const userA = await registerUser(app, {
+      name: 'Safety A',
+      email: `safety-a-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+    const userB = await registerUser(app, {
+      name: 'Safety B',
+      email: `safety-b-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+
+    const userAMe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+    const userAId = readString(asRecord(userAMe.body), 'id');
+
+    const userBMe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .expect(200);
+    const userBId = readString(asRecord(userBMe.body), 'id');
+
+    await request(app.getHttpServer())
+      .put('/profile')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .send({
+        city: 'Safety City',
+        sport: 'Badminton',
+        skillLevel: 'beginner',
+        availabilityDays: ['Sat'],
+      })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .put('/profile')
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .send({
+        city: 'Safety City',
+        sport: 'Badminton',
+        skillLevel: 'beginner',
+        availabilityDays: ['Sat'],
+      })
+      .expect(200);
+
+    const beforeBlock = await request(app.getHttpServer())
+      .get('/matching/suggestions')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+    const beforeBlockSuggestions = toSuggestionsBody(beforeBlock.body);
+    expect(
+      beforeBlockSuggestions.some((candidate) => candidate.user.email === `safety-b-${unique}@e2e.sportsbuddy.dev`),
+    ).toBe(true);
+
+    await request(app.getHttpServer())
+      .post('/safety/blocks')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .send({ userId: userBId })
+      .expect(201)
+      .expect({ success: true });
+
+    const blockedList = await request(app.getHttpServer())
+      .get('/safety/blocks')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+    const blockedEntries = toRecordArray(blockedList.body);
+    expect(blockedEntries).toHaveLength(1);
+    expect(readString(blockedEntries[0], 'id')).toBe(userBId);
+
+    const afterBlockA = await request(app.getHttpServer())
+      .get('/matching/suggestions')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+    expect(toSuggestionsBody(afterBlockA.body)).toHaveLength(0);
+
+    const afterBlockB = await request(app.getHttpServer())
+      .get('/matching/suggestions')
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .expect(200);
+    expect(toSuggestionsBody(afterBlockB.body)).toHaveLength(0);
+
+    await request(app.getHttpServer())
+      .delete(`/safety/blocks/${userBId}`)
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200)
+      .expect({ success: true });
+
+    const afterUnblock = await request(app.getHttpServer())
+      .get('/matching/suggestions')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+
+    const afterUnblockSuggestions = toSuggestionsBody(afterUnblock.body);
+    expect(
+      afterUnblockSuggestions.some((candidate) => candidate.user.email === `safety-b-${unique}@e2e.sportsbuddy.dev`),
+    ).toBe(true);
+
+    expect(userAId.length).toBeGreaterThan(5);
+  });
+
+  it('creates reports and rate limits repeated reporting', async () => {
+    const unique = Date.now().toString();
+    const password = 'Password123!';
+
+    const reporter = await registerUser(app, {
+      name: 'Reporter',
+      email: `reporter-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+    const target = await registerUser(app, {
+      name: 'Report Target',
+      email: `target-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+
+    const targetMe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${target.accessToken}`)
+      .expect(200);
+    const targetId = readString(asRecord(targetMe.body), 'id');
+
+    const firstResponse = await request(app.getHttpServer())
+      .post('/safety/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      .send({ userId: targetId, reason: 'spam' })
+      .expect(201);
+    const firstReport = toReportResponseBody(firstResponse.body);
+    expect(firstReport.success).toBe(true);
+
+    await request(app.getHttpServer())
+      .post('/safety/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      .send({ userId: targetId, reason: 'harassment' })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/safety/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      .send({ userId: targetId, reason: 'fraud' })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/safety/reports')
+      .set('Authorization', `Bearer ${reporter.accessToken}`)
+      .send({ userId: targetId, reason: 'other' })
+      .expect(429);
   });
 
   afterAll(async () => {

@@ -19,6 +19,14 @@ enum ConnectionRequestStatus {
   rejected
 }
 
+enum ReportReason {
+  harassment
+  inappropriate_behavior
+  fraud
+  spam
+  other
+}
+
 model User {
   id               String      @id @default(uuid())
   email            String      @unique
@@ -31,6 +39,10 @@ model User {
   availabilityDays String[]
   sentRequests     ConnectionRequest[] @relation("ConnectionSender")
   receivedRequests ConnectionRequest[] @relation("ConnectionReceiver")
+  blockedUsers     UserBlock[]         @relation("BlockedByUser")
+  blockedByUsers   UserBlock[]         @relation("BlockedUser")
+  submittedReports UserReport[]        @relation("ReporterUser")
+  receivedReports  UserReport[]        @relation("ReportedUser")
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 }
@@ -49,4 +61,32 @@ model ConnectionRequest {
   @@unique([senderId, receiverId])
   @@index([receiverId, status])
   @@index([senderId, status])
+}
+
+model UserBlock {
+  id        String   @id @default(uuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker User @relation("BlockedByUser", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("BlockedUser", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+model UserReport {
+  id         String       @id @default(uuid())
+  reporterId String
+  reportedId String
+  reason     ReportReason
+  details    String?
+  createdAt  DateTime     @default(now())
+
+  reporter User @relation("ReporterUser", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported User @relation("ReportedUser", fields: [reportedId], references: [id], onDelete: Cascade)
+
+  @@index([reporterId, createdAt])
+  @@index([reportedId, createdAt])
 }

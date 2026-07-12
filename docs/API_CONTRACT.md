@@ -126,3 +126,60 @@ GET /matching/suggestions
 Matching notes:
 - city and sport compare case-insensitively after trimming whitespace.
 - skill gap must be <= 1 level.
+- blocked users are excluded from suggestions.
+
+## Safety
+
+POST /safety/blocks
+- auth: Bearer access token
+- body
+```json
+{ "userId": "target-user-uuid" }
+```
+- response 201
+```json
+{ "success": true }
+```
+
+DELETE /safety/blocks/:userId
+- auth: Bearer access token
+- response 200
+```json
+{ "success": true }
+```
+
+GET /safety/blocks
+- auth: Bearer access token
+- response 200
+```json
+[
+  {
+    "id": "blocked-user-id",
+    "email": "blocked@example.com",
+    "name": "Blocked User",
+    "city": "Mangalore",
+    "sport": "Tennis",
+    "skillLevel": "beginner",
+    "availabilityDays": ["Sat"],
+    "blockedAt": "2026-07-12T12:34:56.000Z"
+  }
+]
+```
+
+POST /safety/reports
+- auth: Bearer access token
+- throttle: 3 requests/minute
+- body
+```json
+{ "userId": "target-user-uuid", "reason": "spam", "details": "optional text" }
+```
+- allowed reason values: harassment, inappropriate_behavior, fraud, spam, other
+- response 201
+```json
+{ "success": true, "reportId": "report-uuid" }
+```
+
+Safety notes:
+- users cannot block or report themselves.
+- blocking removes all existing connection requests and buddy relationship between both users.
+- blocked pairs cannot send or respond to connection requests.
