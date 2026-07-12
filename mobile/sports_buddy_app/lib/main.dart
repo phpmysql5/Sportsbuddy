@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -124,10 +125,18 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
+  static const String _googleServerClientId =
+      String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID', defaultValue: '');
+
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: const ['email', 'profile'],
+    serverClientId:
+        _googleServerClientId.isEmpty ? null : _googleServerClientId,
+  );
 
   bool _loading = false;
   bool _registerMode = false;
@@ -155,6 +164,42 @@ class _AuthScreenState extends State<AuthScreen> {
               password: _password.text,
             );
 
+      widget.onSuccess(Map<String, dynamic>.from(data['user']));
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final account = await _googleSignIn.signIn();
+      if (account == null) {
+        setState(() {
+          _error = 'Google sign-in was cancelled';
+        });
+        return;
+      }
+
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw Exception(
+          'Google did not return ID token. Set GOOGLE_SERVER_CLIENT_ID for app run.',
+        );
+      }
+
+      final data = await widget.api.googleSignIn(idToken: idToken);
       widget.onSuccess(Map<String, dynamic>.from(data['user']));
     } catch (e) {
       setState(() {
@@ -240,6 +285,12 @@ class _AuthScreenState extends State<AuthScreen> {
                           child: Text(_loading
                               ? 'Please wait...'
                               : (_registerMode ? 'Register' : 'Login')),
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: _loading ? null : _signInWithGoogle,
+                          icon: const Icon(Icons.login),
+                          label: const Text('Continue with Google'),
                         ),
                         TextButton(
                           onPressed: _loading
@@ -577,6 +628,14 @@ class SportsApi {
     final data = await _post('/auth/login', {
       'email': email,
       'password': password,
+    });
+    await _persistTokens(data);
+    return data;
+  }
+
+  Future<Map<String, dynamic>> googleSignIn({required String idToken}) async {
+    final data = await _post('/auth/google', {
+      'idToken': idToken,
     });
     await _persistTokens(data);
     return data;

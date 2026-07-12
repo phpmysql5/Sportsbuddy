@@ -3,10 +3,13 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
+import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from '../database/prisma.service';
+import { GoogleAuthDto } from './dto/google-auth.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { AuthenticatedUser, AccessTokenPayload } from './auth.types';
@@ -18,6 +21,8 @@ const REFRESH_TOKEN_EXPIRES_IN = '7d';
 
 @Injectable()
 export class AuthService {
+  private readonly googleClient = new OAuth2Client();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -65,6 +70,55 @@ export class AuthService {
     const isPasswordValid = await argon2.verify(user.passwordHash, dto.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const tokens = await this.issueTokens(user.id, user.email);
+    await this.storeRefreshTokenHash(user.id, tokens.refreshToken);
+
+    return { ...tokens, user: toPublicUser(user) };
+  }
+
+  async google(
+    dto: GoogleAuthDto,
+  ): Promise<{ accessToken: string; refreshToken: string; user: PublicUser }> {
+    const configuredClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    if (!configuredClientId) {
+      throw new BadRequestException('GOOGLE_CLIENT_ID is not configured');
+    }
+
+    let payload: { email?: string; email_verified?: boolean; name?: string };
+
+    try {
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken: dto.idToken,
+        audience: configuredClientId,
+      });
+
+      payload = ticket.getPayload() ?? {};
+    } catch {
+      throw new UnauthorizedException('Invalid Google ID token');
+    }
+
+    const email = payload.email?.toLowerCase();
+    if (!email || payload.email_verified !== true) {
+      throw new UnauthorizedException('Google account email is not verified');
+    }
+
+    let user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      const normalizedName = payload.name?.trim();
+
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          name:
+            normalizedName && normalizedName.length > 0
+              ? normalizedName
+              : email.split('@')[0],
+          // Placeholder hash keeps schema compatibility for social-only users.
+          passwordHash: await argon2.hash(randomUUID()),
+        },
+      });
     }
 
     const tokens = await this.issueTokens(user.id, user.email);
