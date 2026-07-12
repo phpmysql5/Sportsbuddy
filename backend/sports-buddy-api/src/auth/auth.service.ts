@@ -67,7 +67,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const isPasswordValid = await argon2.verify(user.passwordHash, dto.password);
+    const isPasswordValid = await argon2.verify(
+      user.passwordHash,
+      dto.password,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -81,7 +84,8 @@ export class AuthService {
   async google(
     dto: GoogleAuthDto,
   ): Promise<{ accessToken: string; refreshToken: string; user: PublicUser }> {
-    const configuredClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    const configuredClientId =
+      this.configService.get<string>('GOOGLE_CLIENT_ID');
     if (!configuredClientId) {
       throw new BadRequestException('GOOGLE_CLIENT_ID is not configured');
     }
@@ -132,12 +136,17 @@ export class AuthService {
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const payload = await this.verifyRefreshToken(dto.refreshToken);
 
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+    });
     if (!user || !user.refreshTokenHash) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const matches = await argon2.verify(user.refreshTokenHash, dto.refreshToken);
+    const matches = await argon2.verify(
+      user.refreshTokenHash,
+      dto.refreshToken,
+    );
     if (!matches) {
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -171,7 +180,9 @@ export class AuthService {
 
   async resolveAccessToken(token: string): Promise<AuthenticatedUser> {
     const payload = await this.verifyAccessToken(token);
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+    });
 
     if (!user) {
       throw new UnauthorizedException('Invalid or expired token');
