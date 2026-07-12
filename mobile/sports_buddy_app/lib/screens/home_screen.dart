@@ -33,6 +33,8 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _outgoingRequests = [];
   List<Map<String, dynamic>> _buddies = [];
   final Set<String> _sendingRequestIds = <String>{};
+  final Set<String> _cancelingRequestIds = <String>{};
+  final Set<String> _removingBuddyIds = <String>{};
 
   @override
   void initState() {
@@ -194,6 +196,66 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _status = e.toString().replaceFirst('Exception: ', '');
       });
+    }
+  }
+
+  Future<void> _cancelOutgoingRequest(String requestId) async {
+    setState(() {
+      _cancelingRequestIds.add(requestId);
+    });
+
+    try {
+      await widget.api.cancelOutgoingRequest(requestId: requestId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = 'Outgoing request cancelled';
+      });
+      await _loadConnections();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cancelingRequestIds.remove(requestId);
+        });
+      }
+    }
+  }
+
+  Future<void> _removeBuddy(String buddyId) async {
+    setState(() {
+      _removingBuddyIds.add(buddyId);
+    });
+
+    try {
+      await widget.api.removeBuddy(buddyId: buddyId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = 'Buddy removed';
+      });
+      await _loadConnections();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _removingBuddyIds.remove(buddyId);
+        });
+      }
     }
   }
 
@@ -463,14 +525,27 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               if (_outgoingRequests.isNotEmpty)
                 ..._outgoingRequests.map(
-                  (request) => Card(
-                    child: ListTile(
-                      title: Text(
-                        (request['receiver']?['name'] ?? 'Unknown').toString(),
+                  (request) {
+                    final requestId = request['id']?.toString() ?? '';
+                    final isCanceling =
+                        requestId.isNotEmpty &&
+                        _cancelingRequestIds.contains(requestId);
+
+                    return Card(
+                      child: ListTile(
+                        title: Text(
+                          (request['receiver']?['name'] ?? 'Unknown').toString(),
+                        ),
+                        subtitle: const Text('Outgoing request (pending)'),
+                        trailing: TextButton(
+                          onPressed: (requestId.isEmpty || isCanceling)
+                              ? null
+                              : () => _cancelOutgoingRequest(requestId),
+                          child: Text(isCanceling ? 'Cancelling...' : 'Cancel'),
+                        ),
                       ),
-                      subtitle: const Text('Outgoing request (pending)'),
-                    ),
-                  ),
+                    );
+                  },
                 ),
             ],
             const SizedBox(height: 14),
@@ -488,15 +563,27 @@ class _HomeScreenState extends State<HomeScreen> {
               )
             else
               ..._buddies.map(
-                (buddy) => Card(
-                  child: ListTile(
-                    title: Text((buddy['name'] ?? 'Unknown').toString()),
-                    subtitle: Text(
-                      '${buddy['sport'] ?? '-'} in ${buddy['city'] ?? '-'}',
+                (buddy) {
+                  final buddyId = buddy['id']?.toString() ?? '';
+                  final isRemoving =
+                      buddyId.isNotEmpty && _removingBuddyIds.contains(buddyId);
+
+                  return Card(
+                    child: ListTile(
+                      title: Text((buddy['name'] ?? 'Unknown').toString()),
+                      subtitle: Text(
+                        '${buddy['sport'] ?? '-'} in ${buddy['city'] ?? '-'}',
+                      ),
+                      leading: const Icon(Icons.people),
+                      trailing: TextButton(
+                        onPressed: (buddyId.isEmpty || isRemoving)
+                            ? null
+                            : () => _removeBuddy(buddyId),
+                        child: Text(isRemoving ? 'Removing...' : 'Remove'),
+                      ),
                     ),
-                    leading: const Icon(Icons.people),
-                  ),
-                ),
+                  );
+                },
               ),
           ],
         ),

@@ -139,6 +139,28 @@ class SportsApi {
     return Map<String, dynamic>.from(raw as Map);
   }
 
+  Future<Map<String, dynamic>> cancelOutgoingRequest({
+    required String requestId,
+  }) async {
+    final raw = await _authorizedRequest(
+      method: 'DELETE',
+      path: '/connections/requests/$requestId',
+    );
+
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<Map<String, dynamic>> removeBuddy({
+    required String buddyId,
+  }) async {
+    final raw = await _authorizedRequest(
+      method: 'DELETE',
+      path: '/connections/buddies/$buddyId',
+    );
+
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
   Future<List<Map<String, dynamic>>> buddies() async {
     final raw = await _authorizedRequest(
       method: 'GET',
@@ -220,6 +242,8 @@ class SportsApi {
         return _client.post(uri, headers: headers, body: jsonEncode(body ?? {}));
       case 'PUT':
         return _client.put(uri, headers: headers, body: jsonEncode(body ?? {}));
+      case 'DELETE':
+        return _client.delete(uri, headers: headers);
       default:
         throw Exception('Unsupported method $method');
     }

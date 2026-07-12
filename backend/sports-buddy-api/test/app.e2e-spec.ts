@@ -549,6 +549,87 @@ describe('Sports Buddy API (e2e)', () => {
     expect(sender.email).toBe(`request-a-${unique}@e2e.sportsbuddy.dev`);
   });
 
+  it('cancels outgoing request and removes connected buddy', async () => {
+    const unique = Date.now().toString();
+    const password = 'Password123!';
+
+    const userA = await registerUser(app, {
+      name: 'Lifecycle User A',
+      email: `lifecycle-a-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+    const userB = await registerUser(app, {
+      name: 'Lifecycle User B',
+      email: `lifecycle-b-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+
+    const receiverMe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .expect(200);
+    const receiverRecord = asRecord(receiverMe.body);
+    const receiverId = readString(receiverRecord, 'id');
+
+    const sendResponse = await request(app.getHttpServer())
+      .post('/connections/requests')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .send({ receiverId })
+      .expect(201);
+    const sentRequest = toConnectionRequestBody(sendResponse.body);
+
+    await request(app.getHttpServer())
+      .delete(`/connections/requests/${sentRequest.id}`)
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200)
+      .expect({ success: true });
+
+    const outgoingAfterCancel = await request(app.getHttpServer())
+      .get('/connections/requests/outgoing')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+    expect(toRecordArray(outgoingAfterCancel.body)).toHaveLength(0);
+
+    const sendAgain = await request(app.getHttpServer())
+      .post('/connections/requests')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .send({ receiverId })
+      .expect(201);
+    const pendingAgain = toConnectionRequestBody(sendAgain.body);
+
+    await request(app.getHttpServer())
+      .post(`/connections/requests/${pendingAgain.id}/respond`)
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .send({ action: 'accept' })
+      .expect(201);
+
+    const buddiesBeforeRemove = await request(app.getHttpServer())
+      .get('/connections/buddies')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+    const buddyList = toRecordArray(buddiesBeforeRemove.body);
+    expect(buddyList).toHaveLength(1);
+    const buddyId = readString(buddyList[0], 'id');
+
+    await request(app.getHttpServer())
+      .delete(`/connections/buddies/${buddyId}`)
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200)
+      .expect({ success: true });
+
+    const buddiesAfterRemoveA = await request(app.getHttpServer())
+      .get('/connections/buddies')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+    expect(toRecordArray(buddiesAfterRemoveA.body)).toHaveLength(0);
+
+    const buddiesAfterRemoveB = await request(app.getHttpServer())
+      .get('/connections/buddies')
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .expect(200);
+    expect(toRecordArray(buddiesAfterRemoveB.body)).toHaveLength(0);
+  });
+
   afterAll(async () => {
     await prisma.user.deleteMany({
       where: { email: { endsWith: '@e2e.sportsbuddy.dev' } },

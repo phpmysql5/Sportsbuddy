@@ -164,4 +164,51 @@ export class ConnectionsService {
       return toPublicUser(buddy);
     });
   }
+
+  async cancelOutgoing(user: AuthenticatedUser, requestId: string) {
+    const request = await this.prisma.connectionRequest.findUnique({
+      where: { id: requestId },
+    });
+
+    if (!request || request.senderId !== user.id) {
+      throw new NotFoundException('Request not found');
+    }
+
+    if (request.status !== 'pending') {
+      throw new BadRequestException('Only pending requests can be cancelled');
+    }
+
+    await this.prisma.connectionRequest.delete({
+      where: { id: requestId },
+    });
+
+    return { success: true };
+  }
+
+  async unfriend(user: AuthenticatedUser, buddyId: string) {
+    if (buddyId === user.id) {
+      throw new BadRequestException('You cannot remove yourself');
+    }
+
+    const existing = await this.prisma.connectionRequest.findFirst({
+      where: {
+        status: 'accepted',
+        OR: [
+          { senderId: user.id, receiverId: buddyId },
+          { senderId: buddyId, receiverId: user.id },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Connection not found');
+    }
+
+    await this.prisma.connectionRequest.delete({
+      where: { id: existing.id },
+    });
+
+    return { success: true };
+  }
 }

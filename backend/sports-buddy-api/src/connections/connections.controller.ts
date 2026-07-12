@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -38,8 +46,24 @@ export class ConnectionsController {
     return this.connectionsService.respond(user, requestId, dto);
   }
 
+  @Delete('requests/:requestId')
+  async cancelOutgoing(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('requestId') requestId: string,
+  ) {
+    return this.connectionsService.cancelOutgoing(user, requestId);
+  }
+
   @Get('buddies')
   async buddies(@CurrentUser() user: AuthenticatedUser) {
     return this.connectionsService.buddies(user);
+  }
+
+  @Delete('buddies/:buddyId')
+  async unfriend(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('buddyId') buddyId: string,
+  ) {
+    return this.connectionsService.unfriend(user, buddyId);
   }
 }
