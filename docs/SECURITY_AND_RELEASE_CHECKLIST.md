@@ -58,4 +58,6 @@ Do not use prisma db push against production databases.
 - Suggestions return expected matches.
 - Block user removes them from suggestions and connection lists.
 - Report user returns success and enforces 429 on burst reporting.
+- Connected buddies can exchange chat messages.
+- Non-buddies are blocked from chat endpoints.
 - Google sign-in end to end works with live client IDs.

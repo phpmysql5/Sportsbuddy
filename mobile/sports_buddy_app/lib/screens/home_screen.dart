@@ -36,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final Set<String> _cancelingRequestIds = <String>{};
   final Set<String> _removingBuddyIds = <String>{};
   final Set<String> _safetyActionUserIds = <String>{};
+  final Set<String> _messagingBuddyIds = <String>{};
 
   @override
   void initState() {
@@ -358,6 +359,122 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (action == 'report') {
       await _reportUser(userId);
+    }
+  }
+
+  Future<String?> _promptMessageContent(String buddyName) async {
+    final controller = TextEditingController();
+
+    final value = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Message $buddyName'),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Share time/place or contact details',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
+    return value;
+  }
+
+  Future<void> _showRecentMessages(String buddyId, String buddyName) async {
+    try {
+      final messages = await widget.api.buddyMessages(buddyId: buddyId);
+      if (!mounted) {
+        return;
+      }
+
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Recent with $buddyName'),
+          content: SizedBox(
+            width: 360,
+            child: messages.isEmpty
+                ? const Text('No messages yet')
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemBuilder: (_, index) {
+                      final message = messages[index];
+                      final senderName =
+                          (message['sender']?['name'] ?? 'Unknown').toString();
+                      final content = (message['content'] ?? '').toString();
+                      return Text('$senderName: $content');
+                    },
+                    separatorBuilder: (_, _) => const Divider(height: 12),
+                    itemCount: messages.length,
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _messageBuddy(String buddyId, String buddyName) async {
+    final content = await _promptMessageContent(buddyName);
+    if (content == null) {
+      return;
+    }
+
+    setState(() {
+      _messagingBuddyIds.add(buddyId);
+    });
+
+    try {
+      await widget.api.sendBuddyMessage(buddyId: buddyId, content: content);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = 'Message sent';
+      });
+      await _showRecentMessages(buddyId, buddyName);
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _status = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _messagingBuddyIds.remove(buddyId);
+        });
+      }
     }
   }
 
@@ -736,10 +853,13 @@ class _HomeScreenState extends State<HomeScreen> {
               ..._buddies.map(
                 (buddy) {
                   final buddyId = buddy['id']?.toString() ?? '';
+                  final buddyName = (buddy['name'] ?? 'Unknown').toString();
                   final isRemoving =
                       buddyId.isNotEmpty && _removingBuddyIds.contains(buddyId);
                   final isSafetyBusy =
                       buddyId.isNotEmpty && _safetyActionUserIds.contains(buddyId);
+                  final isMessaging =
+                      buddyId.isNotEmpty && _messagingBuddyIds.contains(buddyId);
 
                   return Card(
                     child: ListTile(
@@ -751,6 +871,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       trailing: Wrap(
                         spacing: 6,
                         children: [
+                          OutlinedButton(
+                            onPressed: (buddyId.isEmpty || isMessaging)
+                                ? null
+                                : () => _messageBuddy(buddyId, buddyName),
+                            child: Text(isMessaging ? 'Sending...' : 'Message'),
+                          ),
+                          IconButton(
+                            tooltip: 'Recent messages',
+                            onPressed: buddyId.isEmpty
+                                ? null
+                                : () => _showRecentMessages(buddyId, buddyName),
+                            icon: const Icon(Icons.chat_bubble_outline),
+                          ),
                           TextButton(
                             onPressed: (buddyId.isEmpty || isRemoving)
                                 ? null

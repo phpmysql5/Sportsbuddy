@@ -800,6 +800,86 @@ describe('Sports Buddy API (e2e)', () => {
       .expect(429);
   });
 
+  it('allows connected buddies to exchange chat messages', async () => {
+    const unique = Date.now().toString();
+    const password = 'Password123!';
+
+    const userA = await registerUser(app, {
+      name: 'Chat Sender',
+      email: `chat-a-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+    const userB = await registerUser(app, {
+      name: 'Chat Receiver',
+      email: `chat-b-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+    const userC = await registerUser(app, {
+      name: 'Not Buddy',
+      email: `chat-c-${unique}@e2e.sportsbuddy.dev`,
+      password,
+    });
+
+    const userBMe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .expect(200);
+    const userBId = readString(asRecord(userBMe.body), 'id');
+
+    const userAMe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .expect(200);
+    const userAId = readString(asRecord(userAMe.body), 'id');
+
+    const userCMe = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${userC.accessToken}`)
+      .expect(200);
+    const userCId = readString(asRecord(userCMe.body), 'id');
+
+    const requestResponse = await request(app.getHttpServer())
+      .post('/connections/requests')
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .send({ receiverId: userBId })
+      .expect(201);
+    const connectionRequest = toConnectionRequestBody(requestResponse.body);
+
+    await request(app.getHttpServer())
+      .post(`/connections/requests/${connectionRequest.id}/respond`)
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .send({ action: 'accept' })
+      .expect(201);
+
+    const firstMessage = await request(app.getHttpServer())
+      .post(`/chat/buddies/${userBId}/messages`)
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .send({ content: 'Let us play at 7 AM in City Court' })
+      .expect(201);
+    expect(readString(asRecord(firstMessage.body), 'content')).toContain('7 AM');
+
+    await request(app.getHttpServer())
+      .post(`/chat/buddies/${userBId}/messages`)
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .send({ content: 'Bring one extra racket if possible' })
+      .expect(201);
+
+    const conversation = await request(app.getHttpServer())
+      .get(`/chat/buddies/${userAId}/messages?limit=10`)
+      .set('Authorization', `Bearer ${userB.accessToken}`)
+      .expect(200);
+    const messages = toRecordArray(conversation.body);
+    expect(messages).toHaveLength(2);
+    expect(readString(messages[0], 'content')).toContain('7 AM');
+    expect(readString(messages[1], 'content')).toContain('extra racket');
+
+    await request(app.getHttpServer())
+      .post(`/chat/buddies/${userCId}/messages`)
+      .set('Authorization', `Bearer ${userA.accessToken}`)
+      .send({ content: 'hello there' })
+      .expect(400);
+  });
+
   afterAll(async () => {
     await prisma.user.deleteMany({
       where: { email: { endsWith: '@e2e.sportsbuddy.dev' } },

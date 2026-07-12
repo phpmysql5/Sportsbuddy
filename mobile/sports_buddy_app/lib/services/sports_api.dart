@@ -172,6 +172,33 @@ class SportsApi {
         .toList();
   }
 
+  Future<Map<String, dynamic>> sendBuddyMessage({
+    required String buddyId,
+    required String content,
+  }) async {
+    final raw = await _authorizedRequest(
+      method: 'POST',
+      path: '/chat/buddies/$buddyId/messages',
+      body: {'content': content},
+    );
+
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> buddyMessages({
+    required String buddyId,
+    int limit = 20,
+  }) async {
+    final raw = await _authorizedRequest(
+      method: 'GET',
+      path: '/chat/buddies/$buddyId/messages?limit=$limit',
+    );
+
+    return (raw as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> blockUser({
     required String userId,
   }) async {

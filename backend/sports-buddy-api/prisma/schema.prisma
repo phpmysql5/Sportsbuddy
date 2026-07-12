@@ -43,6 +43,8 @@ model User {
   blockedByUsers   UserBlock[]         @relation("BlockedUser")
   submittedReports UserReport[]        @relation("ReporterUser")
   receivedReports  UserReport[]        @relation("ReportedUser")
+  sentMessages     BuddyMessage[]      @relation("BuddyMessageSender")
+  receivedMessages BuddyMessage[]      @relation("BuddyMessageReceiver")
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 }
@@ -89,4 +91,18 @@ model UserReport {
 
   @@index([reporterId, createdAt])
   @@index([reportedId, createdAt])
+}
+
+model BuddyMessage {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  content    String
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("BuddyMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("BuddyMessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId, receiverId, createdAt])
+  @@index([receiverId, senderId, createdAt])
 }

@@ -183,3 +183,42 @@ Safety notes:
 - users cannot block or report themselves.
 - blocking removes all existing connection requests and buddy relationship between both users.
 - blocked pairs cannot send or respond to connection requests.
+
+## Chat (Buddy Handoff)
+
+POST /chat/buddies/:buddyId/messages
+- auth: Bearer access token
+- body
+```json
+{ "content": "Let us play at 7 AM in City Court" }
+```
+- response 201
+```json
+{
+  "id": "message-uuid",
+  "content": "Let us play at 7 AM in City Court",
+  "sender": { "id": "...", "email": "...", "name": "...", "city": null, "sport": null, "skillLevel": null, "availabilityDays": [] },
+  "receiver": { "id": "...", "email": "...", "name": "...", "city": null, "sport": null, "skillLevel": null, "availabilityDays": [] },
+  "createdAt": "2026-07-12T12:00:00.000Z"
+}
+```
+
+GET /chat/buddies/:buddyId/messages?limit=20
+- auth: Bearer access token
+- response 200
+```json
+[
+  {
+    "id": "message-uuid",
+    "content": "See you at 7 AM",
+    "sender": { "id": "...", "email": "...", "name": "...", "city": null, "sport": null, "skillLevel": null, "availabilityDays": [] },
+    "receiver": { "id": "...", "email": "...", "name": "...", "city": null, "sport": null, "skillLevel": null, "availabilityDays": [] },
+    "createdAt": "2026-07-12T12:00:00.000Z"
+  }
+]
+```
+
+Chat notes:
+- chat is currently available only between connected buddies.
+- blocked pairs cannot send or view chat messages.
+- `limit` is clamped to 1..50.
