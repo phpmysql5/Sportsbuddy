@@ -16,6 +16,10 @@ function readEnvString(
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+function readNodeEnv(): string {
+  return process.env.NODE_ENV?.trim().toLowerCase() ?? 'development';
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -54,7 +58,7 @@ function readEnvString(
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,
-        limit: 60,
+        limit: readNodeEnv() === 'test' ? 10_000 : 60,
       },
     ]),
     PrismaModule,

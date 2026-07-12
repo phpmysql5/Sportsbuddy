@@ -87,3 +87,8 @@ cd mobile/sports_buddy_app
 flutter analyze
 flutter test
 ```
+
+## Operational docs
+
+- API contract: docs/API_CONTRACT.md
+- Security and release checklist: docs/SECURITY_AND_RELEASE_CHECKLIST.md
